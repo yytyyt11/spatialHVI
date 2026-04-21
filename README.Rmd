@@ -1,0 +1,71 @@
+---
+output: github_document
+---
+
+# mypackage
+
+`mypackage` is an R package for simulation, variational inference fitting, and
+heritability summaries for halves-ordered paired traits.
+
+The package is currently a development version.
+
+## Installation
+
+```r
+install.packages("remotes")
+remotes::install_github("yytyyt11/mypackage")
+```
+
+For local development:
+
+```r
+devtools::load_all()
+```
+
+## Main functions
+
+- `simulate_halves_batch()`: generate simulation outputs from grouped SNP files.
+- `run_vi_hetero_from_mats()`: fit the heteroscedastic VI model from matrices.
+- `run_vi_homo_from_mats()`: fit the homoscedastic VI model from matrices.
+- `fit_simulation_case_halves()`: fit one simulated dataset and summarize heritability.
+- `run_simulation_batch_halves()`: fit a whole simulation directory from disk.
+- `run_realdata_brain_hetero_halves()`: run the real-data workflow from a brain CSV plus genotype matrix or kinship matrix.
+- `run_realdata_halves_from_files()`: run the real-data workflow from a brain CSV and `.RData` file.
+- `heritability_from_vi()`: compute broad-sense and narrow-sense heritability.
+- `save_vi_result()`: write posterior summaries to disk.
+
+## Example
+
+```r
+library(mypackage)
+
+set.seed(1)
+x <- matrix(rnorm(48), nrow = 8)
+y <- matrix(rnorm(32), nrow = 4)
+k_mat <- build_kinship_matrix(x)
+
+fit <- run_vi_hetero_from_mats(
+  y = y,
+  k_mat = k_mat,
+  rho_grid = seq(0, 0.2, by = 0.1),
+  max_iter = 2,
+  tol = 0,
+  verbose = FALSE
+)
+
+heritability_from_vi(fit)$H2
+```
+
+## Real-data template
+
+```r
+run_realdata_halves_from_files(
+  brain_csv = "path/to/BrainMeasure_data.csv",
+  rdata_path = "path/to/FreeSurfer_Data.RData",
+  use_k_from = "X",
+  x_object = "FreeSurfer_list_Data",
+  annotation_object = "SNP_gene_member_reduced",
+  x_id_col = "PTID",
+  phenotype_layout = "traits_in_rows"
+)
+```
