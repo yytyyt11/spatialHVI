@@ -1,6 +1,7 @@
 ^dev$
 ^README\.Rmd$
-^mypackage\.Rproj$
+^README\.html$
+^spatialHVI\.Rproj$
 ^\.Rproj\.user$
 ^BrainMeasure_data\.csv$
 ^FreeSurfer_Data\.RData$

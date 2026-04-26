@@ -1,8 +1,9 @@
 
-# mypackage
+# spatialHVI
 
-`mypackage` is an R package for simulation, variational inference
-fitting, and heritability summaries for halves-ordered paired traits.
+`spatialHVI` is an R package for simulation, variational inference
+fitting, and heritability summaries for Bayesian spatial heritability
+analysis of halves-ordered paired traits.
 
 The package is currently a development version.
 
@@ -12,6 +13,9 @@ The package is currently a development version.
 install.packages("remotes")
 remotes::install_github("yytyyt11/mypackage")
 ```
+
+The current GitHub repository path is `yytyyt11/mypackage`, even though
+the installed package name is `spatialHVI`.
 
 For local development:
 
@@ -42,7 +46,7 @@ devtools::load_all()
 ## Example
 
 ``` r
-library(mypackage)
+library(spatialHVI)
 
 set.seed(1)
 x <- matrix(rnorm(48), nrow = 8)
@@ -74,3 +78,18 @@ run_realdata_halves_from_files(
   phenotype_layout = "traits_in_rows"
 )
 ```
+
+## Reference
+
+Please cite the manuscript associated with `spatialHVI` as:
+
+Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang
+(2026). *Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling
+Framework for Disentangling Genetic Contributions to Spatially
+Correlated Complex Traits*. Preprint / Manuscript. Correspondence:
+<yutomakabaka@gmail.com>.
+
+## Contact
+
+- Package maintenance contact: yytyyt11 Maintainer <819826397@qq.com>
+- Scientific correspondence: Shijia Wang <wangshj1@shanghaitech.edu.cn>

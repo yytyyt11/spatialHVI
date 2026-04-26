@@ -1,0 +1,40 @@
+meta <- utils::packageDescription("spatialHVI")
+
+citHeader("To cite spatialHVI, please cite the associated manuscript and, when relevant, the package itself.")
+
+citEntry(
+  entry = "Unpublished",
+  title = "Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling Framework for Disentangling Genetic Contributions to Spatially Correlated Complex Traits",
+  author = personList(
+    person("Yutong", "Yang"),
+    person("Fulong", "Zhang"),
+    person("Zhibin", "Pu"),
+    person("Shufei", "Ge"),
+    person("Shijia", "Wang")
+  ),
+  year = "2026",
+  note = "Preprint / Manuscript",
+  textVersion = paste(
+    "Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang (2026).",
+    "Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling Framework for Disentangling Genetic Contributions to Spatially Correlated Complex Traits.",
+    "Preprint / Manuscript.",
+    "Correspondence: yutomakabaka@gmail.com."
+  )
+)
+
+citEntry(
+  entry = "Manual",
+  title = "spatialHVI: Spatial Heritability Variational Inference for Imaging Genetics",
+  author = personList(
+    person("yytyyt11", "Maintainer", email = "819826397@qq.com")
+  ),
+  year = "2026",
+  note = paste("R package version", meta$Version),
+  url = meta$URL,
+  textVersion = paste(
+    "yytyyt11 Maintainer (2026).",
+    "spatialHVI: Spatial Heritability Variational Inference for Imaging Genetics.",
+    "R package version", meta$Version, ".",
+    meta$URL
+  )
+)

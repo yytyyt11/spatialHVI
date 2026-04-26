@@ -1,4 +1,4 @@
 library(testthat)
-library(mypackage)
+library(spatialHVI)
 
-test_check("mypackage")
+test_check("spatialHVI")

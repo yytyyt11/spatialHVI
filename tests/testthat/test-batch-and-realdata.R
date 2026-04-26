@@ -1,5 +1,5 @@
 test_that("run_simulation_batch_halves fits a generated dataset", {
-  root_dir <- file.path(tempdir(), paste0("mypackage-fit-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+  root_dir <- file.path(tempdir(), paste0("spatialHVI-fit-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
   dir.create(root_dir, recursive = TRUE, showWarnings = FALSE)
   group_dir <- file.path(root_dir, "group_a")
   dir.create(group_dir, showWarnings = FALSE)
@@ -38,7 +38,7 @@ test_that("run_simulation_batch_halves fits a generated dataset", {
 })
 
 test_that("run_realdata_halves_from_files loads the genotype object and fits", {
-  root_dir <- file.path(tempdir(), paste0("mypackage-real-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+  root_dir <- file.path(tempdir(), paste0("spatialHVI-real-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
   dir.create(root_dir, recursive = TRUE, showWarnings = FALSE)
 
   brain_path <- file.path(root_dir, "brain.csv")

@@ -24,7 +24,7 @@ test_that("build_a_from_y_halves can reorder alternating trait pairs", {
 })
 
 test_that("simulate_halves_batch writes expected simulation files", {
-  root_dir <- file.path(tempdir(), paste0("mypackage-sim-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
+  root_dir <- file.path(tempdir(), paste0("spatialHVI-sim-", Sys.getpid(), "-", as.integer(stats::runif(1, 1, 1e6))))
   dir.create(root_dir, recursive = TRUE, showWarnings = FALSE)
   group_dir <- file.path(root_dir, "group_a")
   dir.create(group_dir, showWarnings = FALSE)

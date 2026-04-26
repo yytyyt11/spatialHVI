@@ -1,14 +1,15 @@
-Package: mypackage
-Title: Halves-Ordered Variational Inference Tools
+Package: spatialHVI
+Title: Spatial Heritability Variational Inference for Imaging Genetics
 Version: 0.0.0.9000
 Authors@R:
     person(given = "yytyyt11",
            family = "Maintainer",
            email = "819826397@qq.com",
            role = c("aut", "cre"))
-Description: Provides utilities to generate simulation data, fit fast
-    variational inference models, and summarize heritability for
-    halves-ordered left and right trait pairs.
+Description: Provides utilities for simulation, fast variational
+    inference fitting, and heritability summaries under a Bayesian spatial
+    heritability model for halves-ordered left and right trait pairs in
+    imaging genetics and related multivariate settings.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
