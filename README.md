@@ -11,11 +11,10 @@ The package is currently a development version.
 
 ``` r
 install.packages("remotes")
-remotes::install_github("yytyyt11/mypackage")
+remotes::install_github("yytyyt11/spatialHVI")
 ```
 
-The current GitHub repository path is `yytyyt11/mypackage`, even though
-the installed package name is `spatialHVI`.
+
 
 For local development:
 
