@@ -90,5 +90,4 @@ Correlated Complex Traits*. Preprint / Manuscript. Correspondence:
 
 ## Contact
 
-- Package maintenance contact: yytyyt11 Maintainer <819826397@qq.com>
-- Scientific correspondence: Shijia Wang <wangshj1@shanghaitech.edu.cn>
+Yutong Yang <yutomakabaka@gmail.com> Shijia Wang <wangshj1@shanghaitech.edu.cn>
