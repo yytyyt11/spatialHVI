@@ -1,9 +1,9 @@
 
 # spatialHVI
 
-`spatialHVI` is an R package for simulation, variational inference
-fitting, and heritability summaries for Bayesian spatial heritability
-analysis of halves-ordered paired traits.
+`spatialHVI` is an R package for Bayesian spatial heritability
+analysis of halves-ordered paired traits. The package includes functions for simulation, variational inference
+fitting, and heritability summaries.
 
 The package is currently a development version.
 
