@@ -15,21 +15,58 @@ run_vi_hetero_from_mats(
 )
 }
 \arguments{
-\item{y}{A numeric matrix with traits in rows and subjects in columns, ordered
-as \verb{(L1, ..., LJ, R1, ..., RJ)}.}
+\item{y}{Numeric phenotype matrix \eqn{Y} with traits in rows and subjects in
+columns. In the manuscript notation this is the \eqn{C \times n} phenotype
+matrix, where \eqn{C = 2J} is even and \eqn{n} is the number of subjects.
+The rows must already be in halves order \verb{(L1, ..., LJ, R1, ..., RJ)};
+this fitting function does not reorder \code{y}. The column order must be the
+same subject order used in \code{k_mat}. If traits are supplied in columns,
+rows are in alternating pair order, or subjects are not aligned with
+\code{k_mat}, the fitted genetic and residual covariance quantities will refer
+to the wrong model axes or the function will stop on a dimension check.}
 
-\item{k_mat}{A subject-by-subject kinship matrix.}
+\item{k_mat}{Numeric kinship matrix \eqn{K} with dimension \eqn{n \times n}.
+Rows and columns represent subjects in exactly the same order as the
+columns of \code{y}. The matrix is symmetrized and scaled internally to have
+mean diagonal one. Use \code{\link[=build_kinship_matrix]{build_kinship_matrix()}} to construct it from SNP
+dosages, or provide a precomputed genomic relationship matrix. A dimension
+mismatch stops the fit; a silently permuted subject order produces invalid
+heritability estimates.}
 
-\item{a_mat}{Optional \code{J} by \code{J} adjacency matrix. When \code{NULL}, it is estimated
-from \code{y}.}
+\item{a_mat}{Optional numeric pair-level spatial adjacency matrix \eqn{A} of
+dimension \eqn{J \times J}, where \eqn{J = C/2}. Entry \verb{(i, j)} encodes the
+neighborhood weight between paired ROIs \code{i} and \code{j}; the diagonal is treated
+as zero and the matrix is spectrally normalized internally. When \code{NULL}, an
+adjacency matrix is estimated from \code{y} using \code{\link[=build_a_from_y_halves]{build_a_from_y_halves()}} with
+its defaults. Provide \code{a_mat} when anatomical or simulation adjacency is
+known and should define the residual precision \eqn{D_A - \rho A}. A wrong
+pair order or wrong dimension stops the fit or assigns spatial dependence
+to the wrong ROI pairs.}
 
-\item{rho_grid}{Candidate rho values.}
+\item{rho_grid}{Numeric vector of candidate spatial dependence values for
+\eqn{\rho}. The variational posterior for \eqn{\rho} is represented on
+this discrete grid with a uniform prior over values that make
+\eqn{D_A - \rho A} positive definite. The default \code{seq(0, 0.99, by = 0.01)}
+searches nonnegative spatial dependence below one. Use a denser or narrower
+grid when prior scientific knowledge or computation time warrants it. Empty,
+non-finite, or entirely invalid grids stop the fit; overly coarse grids can
+blur the posterior mean \code{E_rho}.}
 
-\item{max_iter}{Maximum number of VI iterations.}
+\item{max_iter}{Positive integer maximum number of coordinate-ascent VI
+iterations. The default \code{5000} favors convergence for routine analyses.
+Increase it if the ELBO has not stabilized; decrease it for smoke tests or
+examples. Very small values may return an intentionally under-converged
+posterior.}
 
-\item{tol}{Absolute ELBO tolerance used for convergence.}
+\item{tol}{Non-negative numeric scalar ELBO tolerance. Iteration stops when
+the absolute change in ELBO is smaller than \code{tol}; the default \code{1e-4} is a
+practical convergence threshold. Use \code{0} to force the algorithm to run
+until \code{max_iter} in tests or timing experiments. Larger values stop earlier
+but may reduce posterior accuracy.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints ELBO progress.}
+\item{verbose}{Logical scalar. When \code{TRUE} (default), the function prints the
+ELBO at each iteration; set to \code{FALSE} for batch runs, tests, or scripted
+pipelines where per-iteration messages would be noisy.}
 }
 \value{
 A list containing posterior summaries, ELBO history, and fitted

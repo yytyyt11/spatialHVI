@@ -7,10 +7,21 @@
 save_vi_result(res, prefix = "vi_result")
 }
 \arguments{
-\item{res}{A fitted result object returned by \code{\link[=run_vi_hetero_from_mats]{run_vi_hetero_from_mats()}} or
-\code{\link[=run_vi_homo_from_mats]{run_vi_homo_from_mats()}}.}
+\item{res}{Fitted VI result list returned by \code{\link[=run_vi_hetero_from_mats]{run_vi_hetero_from_mats()}} or
+\code{\link[=run_vi_homo_from_mats]{run_vi_homo_from_mats()}}. The object must contain posterior summaries for
+the model quantities in the manuscript, including the grid and weights for
+\eqn{\rho}, genetic variance summaries \code{E_sigma2}, residual covariance
+summaries \code{E_Sigma}, posterior mean random effects \code{mu}, and covariance
+diagnostics. Passing a partial or modified list stops with a missing-field
+error.}
 
-\item{prefix}{Output file prefix. Parent directories are created automatically.}
+\item{prefix}{Character scalar output file prefix, optionally including a
+directory. The default \code{"vi_result"} writes files such as
+\code{vi_result_rho_posterior.csv}, \code{vi_result_sigma2_posterior.csv}, and
+\code{vi_result_full_result.rds} in the current working directory. Parent
+directories are created automatically. This is a prefix rather than an
+output directory; existing files with the same names are overwritten by the
+underlying CSV/RDS writers.}
 }
 \value{
 An invisible named character vector of written file paths.

@@ -1,9 +1,9 @@
+spatialHVI
+================
 
-# spatialHVI
-
-`spatialHVI` is an R package for Bayesian spatial heritability
-analysis of halves-ordered paired traits. The package includes functions for simulation, variational inference
-fitting, and heritability summaries.
+`spatialHVI` is an R package for Bayesian spatial heritability analysis
+of halves-ordered paired traits. The package includes functions for
+simulation, variational inference fitting, and heritability summaries.
 
 The package is currently a development version.
 
@@ -13,8 +13,6 @@ The package is currently a development version.
 install.packages("remotes")
 remotes::install_github("yytyyt11/spatialHVI")
 ```
-
-
 
 For local development:
 
@@ -38,9 +36,21 @@ devtools::load_all()
   a brain CSV plus genotype matrix or kinship matrix.
 - `run_realdata_halves_from_files()`: run the real-data workflow from a
   brain CSV and `.RData` file.
-- `heritability_from_vi()`: compute broad-sense and narrow-sense
-  heritability.
+- `heritability_from_vi()`: compute trait-wise narrow-sense heritability
+  and global principal-component heritability summary.
 - `save_vi_result()`: write posterior summaries to disk.
+
+## Function argument guide
+
+Detailed parameter explanations are available in the function help
+pages, for example `?run_vi_hetero_from_mats` and
+`?run_realdata_halves_from_files`. For a centralized guide to data
+layout, manuscript notation (`Y`, `K`, `A`, `rho`), sample alignment,
+trait ordering, and common input mistakes, see the vignette:
+
+``` r
+vignette("function-arguments", package = "spatialHVI")
+```
 
 ## Example
 
@@ -85,8 +95,9 @@ Please cite the manuscript associated with `spatialHVI` as:
 Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang
 (2026). *Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling
 Framework for Disentangling Genetic Contributions to Spatially
-Correlated Complex Traits*. Preprint / Manuscript. 
+Correlated Complex Traits*. Preprint / Manuscript.
 
 ## Contact
 
-Yutong Yang <yutomakabaka@gmail.com>, Shijia Wang <wangshj1@shanghaitech.edu.cn>
+Yutong Yang <yutomakabaka@gmail.com>, Shijia Wang
+<wangshj1@shanghaitech.edu.cn>

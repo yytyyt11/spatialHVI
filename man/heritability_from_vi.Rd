@@ -7,13 +7,26 @@
 heritability_from_vi(res, a_mat = NULL, pairing = c("halves"))
 }
 \arguments{
-\item{res}{A fitted result object returned by \code{\link[=run_vi_hetero_from_mats]{run_vi_hetero_from_mats()}} or
-\code{\link[=run_vi_homo_from_mats]{run_vi_homo_from_mats()}}.}
+\item{res}{Fitted VI result list returned by \code{\link[=run_vi_hetero_from_mats]{run_vi_hetero_from_mats()}} or
+\code{\link[=run_vi_homo_from_mats]{run_vi_homo_from_mats()}}. It supplies posterior estimates of
+\eqn{\sigma^2_{gc}}, \eqn{\Sigma}, \eqn{\rho}, and the fitted adjacency
+needed to compute trait-specific narrow-sense heritability \eqn{h_c^2} and
+the global principal-component heritability summary \eqn{H^2}. The result
+must correspond to an even number of halves-ordered traits.}
 
-\item{a_mat}{Optional adjacency matrix. When \code{NULL}, the fitted adjacency matrix
-stored in \code{res} is used.}
+\item{a_mat}{Optional numeric pair-level adjacency matrix \eqn{A} with
+dimension \eqn{J \times J}, where \eqn{J = length(res$E_sigma2) / 2}. When
+\code{NULL} (default), the fitted adjacency \code{res$A} is used. Supply this
+explicitly when heritability should be computed with the known simulation or
+anatomical adjacency rather than the stored value. The matrix is
+normalized internally; a wrong pair order changes the residual variance
+decomposition, and a wrong dimension stops.}
 
-\item{pairing}{Pairing mode. Currently only \code{"halves"} is supported.}
+\item{pairing}{Character scalar specifying how the \eqn{C} traits map to
+left/right ROI pairs. Currently only \code{"halves"} is supported, meaning the
+fitted result uses rows \verb{(L1, ..., LJ, R1, ..., RJ)}. Other layouts should
+be reordered before fitting; unsupported values are rejected by
+\code{\link[base:match.arg]{base::match.arg()}}.}
 }
 \value{
 A list with elements \code{h2}, \code{H2}, and \code{pieces}.

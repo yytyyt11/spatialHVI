@@ -14,22 +14,46 @@ simulate_halves_batch(
 )
 }
 \arguments{
-\item{group_cfgs}{A named list of group configurations. Each element must
-define \code{c_traits} (or \code{C}), \code{rho}, \code{knn_k}, \code{knn_sigma}, \code{seed_a} (or
-\code{seedA}), and \code{sigma2_pairs}.}
+\item{group_cfgs}{Named list of simulation group configurations. Each name
+must match a subdirectory under \code{base_dir} that contains SNP files. Each
+element defines the model quantities for that group: \code{c_traits} or \code{C} is
+the even number of phenotype rows \eqn{C}; \code{rho} is the target spatial
+dependence parameter \eqn{\rho}; \code{knn_k} and \code{knn_sigma} control the
+simulated pair-level adjacency \eqn{A}; \code{seed_a} or \code{seedA} fixes the
+random adjacency; and \code{sigma2_pairs} gives the genetic variance values for
+the \eqn{J = C/2} ROI pairs, recycled with a warning if needed and expanded
+to both left and right traits. Incorrect \code{C}, pair variance length, or
+missing fields stop generation or create simulations whose dimensions do
+not match downstream VI inputs.}
 
-\item{sigma_block}{A 2 by 2 residual covariance matrix shared across groups.}
+\item{sigma_block}{Numeric \eqn{2 \times 2} residual covariance matrix
+\eqn{\Sigma} shared across groups for the left/right traits within each
+ROI pair. This matrix is combined with the spatial covariance
+\eqn{(D_A - \rho A)^{-1}} through a Kronecker product. It should be
+symmetric positive definite for valid Gaussian simulation; wrong dimensions
+stop immediately.}
 
-\item{base_dir}{Directory containing the group folders.}
+\item{base_dir}{Character scalar directory containing the named group
+folders. The default \code{"."} searches the current working directory. For a
+group named \code{"group_a"}, SNP files are read from \code{file.path(base_dir, "group_a")}, and generated outputs are written into per-SNP subdirectories
+inside that folder.}
 
-\item{summary_path}{Optional CSV path for the batch summary. Use \code{NULL} to
-skip writing the summary to disk.}
+\item{summary_path}{Optional character path for the batch-generation summary
+CSV. The default writes \code{batch_generation_summary.csv} under \code{base_dir}.
+Use \code{NULL} to return the summary data frame without writing it. Existing
+files are overwritten.}
 
-\item{snp_pattern}{Regular expression used to find SNP CSV files inside each
-group directory.}
+\item{snp_pattern}{Character regular expression used to find SNP input files
+inside each group directory. The default \code{"^SNP[0-9]+\\\\.csv$"} matches
+files such as \code{SNP1.csv}. Each file must contain a numeric SNP dosage matrix
+with subjects in rows and SNPs in columns; non-numeric ID columns should not
+be included.}
 
-\item{seed_offset}{Integer seed offset used when generating replicate-level
-randomness.}
+\item{seed_offset}{Integer scalar added to group and run indices when setting
+seeds for replicate-level random effects and residuals. The default \code{777}
+makes simulation outputs reproducible given fixed SNP files and group
+configs. Change it to generate a different Monte Carlo replicate while
+preserving the same group-level adjacency seeds.}
 }
 \value{
 A data frame summarizing all generated datasets.

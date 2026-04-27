@@ -14,8 +14,8 @@ Package maintenance contact: yytyyt11 Maintainer
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/yytyyt11/mypackage}
-  \item Report bugs at \url{https://github.com/yytyyt11/mypackage/issues}
+  \item \url{https://github.com/yytyyt11/spatialHVI}
+  \item Report bugs at \url{https://github.com/yytyyt11/spatialHVI/issues}
 }
 
 }

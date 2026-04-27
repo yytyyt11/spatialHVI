@@ -143,17 +143,42 @@ empty_generation_summary <- function() {
 #' adjacency matrix for each group, and writes simulated phenotypes and latent
 #' components for every SNP file that matches `snp_pattern`.
 #'
-#' @param group_cfgs A named list of group configurations. Each element must
-#'   define `c_traits` (or `C`), `rho`, `knn_k`, `knn_sigma`, `seed_a` (or
-#'   `seedA`), and `sigma2_pairs`.
-#' @param sigma_block A 2 by 2 residual covariance matrix shared across groups.
-#' @param base_dir Directory containing the group folders.
-#' @param summary_path Optional CSV path for the batch summary. Use `NULL` to
-#'   skip writing the summary to disk.
-#' @param snp_pattern Regular expression used to find SNP CSV files inside each
-#'   group directory.
-#' @param seed_offset Integer seed offset used when generating replicate-level
-#'   randomness.
+#' @param group_cfgs Named list of simulation group configurations. Each name
+#'   must match a subdirectory under `base_dir` that contains SNP files. Each
+#'   element defines the model quantities for that group: `c_traits` or `C` is
+#'   the even number of phenotype rows \eqn{C}; `rho` is the target spatial
+#'   dependence parameter \eqn{\rho}; `knn_k` and `knn_sigma` control the
+#'   simulated pair-level adjacency \eqn{A}; `seed_a` or `seedA` fixes the
+#'   random adjacency; and `sigma2_pairs` gives the genetic variance values for
+#'   the \eqn{J = C/2} ROI pairs, recycled with a warning if needed and expanded
+#'   to both left and right traits. Incorrect `C`, pair variance length, or
+#'   missing fields stop generation or create simulations whose dimensions do
+#'   not match downstream VI inputs.
+#' @param sigma_block Numeric \eqn{2 \times 2} residual covariance matrix
+#'   \eqn{\Sigma} shared across groups for the left/right traits within each
+#'   ROI pair. This matrix is combined with the spatial covariance
+#'   \eqn{(D_A - \rho A)^{-1}} through a Kronecker product. It should be
+#'   symmetric positive definite for valid Gaussian simulation; wrong dimensions
+#'   stop immediately.
+#' @param base_dir Character scalar directory containing the named group
+#'   folders. The default `"."` searches the current working directory. For a
+#'   group named `"group_a"`, SNP files are read from `file.path(base_dir,
+#'   "group_a")`, and generated outputs are written into per-SNP subdirectories
+#'   inside that folder.
+#' @param summary_path Optional character path for the batch-generation summary
+#'   CSV. The default writes `batch_generation_summary.csv` under `base_dir`.
+#'   Use `NULL` to return the summary data frame without writing it. Existing
+#'   files are overwritten.
+#' @param snp_pattern Character regular expression used to find SNP input files
+#'   inside each group directory. The default `"^SNP[0-9]+\\.csv$"` matches
+#'   files such as `SNP1.csv`. Each file must contain a numeric SNP dosage matrix
+#'   with subjects in rows and SNPs in columns; non-numeric ID columns should not
+#'   be included.
+#' @param seed_offset Integer scalar added to group and run indices when setting
+#'   seeds for replicate-level random effects and residuals. The default `777`
+#'   makes simulation outputs reproducible given fixed SNP files and group
+#'   configs. Change it to generate a different Monte Carlo replicate while
+#'   preserving the same group-level adjacency seeds.
 #'
 #' @return A data frame summarizing all generated datasets.
 #' @export

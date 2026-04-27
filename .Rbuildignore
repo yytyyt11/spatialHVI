@@ -6,3 +6,5 @@
 ^BrainMeasure_data\.csv$
 ^FreeSurfer_Data\.RData$
 ^Heritability_analysis_for_image_genetics \(5\)\.pdf$
+^doc$
+^Meta$

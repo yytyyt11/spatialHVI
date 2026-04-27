@@ -42,9 +42,20 @@ format_heritability_summary <- function(res, h) {
 #' Writes posterior summaries derived from a fitted VI object to disk using a
 #' shared file-name prefix.
 #'
-#' @param res A fitted result object returned by [run_vi_hetero_from_mats()] or
-#'   [run_vi_homo_from_mats()].
-#' @param prefix Output file prefix. Parent directories are created automatically.
+#' @param res Fitted VI result list returned by [run_vi_hetero_from_mats()] or
+#'   [run_vi_homo_from_mats()]. The object must contain posterior summaries for
+#'   the model quantities in the manuscript, including the grid and weights for
+#'   \eqn{\rho}, genetic variance summaries `E_sigma2`, residual covariance
+#'   summaries `E_Sigma`, posterior mean random effects `mu`, and covariance
+#'   diagnostics. Passing a partial or modified list stops with a missing-field
+#'   error.
+#' @param prefix Character scalar output file prefix, optionally including a
+#'   directory. The default `"vi_result"` writes files such as
+#'   `vi_result_rho_posterior.csv`, `vi_result_sigma2_posterior.csv`, and
+#'   `vi_result_full_result.rds` in the current working directory. Parent
+#'   directories are created automatically. This is a prefix rather than an
+#'   output directory; existing files with the same names are overwritten by the
+#'   underlying CSV/RDS writers.
 #'
 #' @return An invisible named character vector of written file paths.
 #' @export
@@ -144,11 +155,24 @@ reconstruct_full_sig_list <- function(res) {
 #' Computes broad-sense and trait-specific narrow-sense heritability from a fitted
 #' halves-ordered VI model.
 #'
-#' @param res A fitted result object returned by [run_vi_hetero_from_mats()] or
-#'   [run_vi_homo_from_mats()].
-#' @param a_mat Optional adjacency matrix. When `NULL`, the fitted adjacency matrix
-#'   stored in `res` is used.
-#' @param pairing Pairing mode. Currently only `"halves"` is supported.
+#' @param res Fitted VI result list returned by [run_vi_hetero_from_mats()] or
+#'   [run_vi_homo_from_mats()]. It supplies posterior estimates of
+#'   \eqn{\sigma^2_{gc}}, \eqn{\Sigma}, \eqn{\rho}, and the fitted adjacency
+#'   needed to compute trait-specific narrow-sense heritability \eqn{h_c^2} and
+#'   the global principal-component heritability summary \eqn{H^2}. The result
+#'   must correspond to an even number of halves-ordered traits.
+#' @param a_mat Optional numeric pair-level adjacency matrix \eqn{A} with
+#'   dimension \eqn{J \times J}, where \eqn{J = length(res$E_sigma2) / 2}. When
+#'   `NULL` (default), the fitted adjacency `res$A` is used. Supply this
+#'   explicitly when heritability should be computed with the known simulation or
+#'   anatomical adjacency rather than the stored value. The matrix is
+#'   normalized internally; a wrong pair order changes the residual variance
+#'   decomposition, and a wrong dimension stops.
+#' @param pairing Character scalar specifying how the \eqn{C} traits map to
+#'   left/right ROI pairs. Currently only `"halves"` is supported, meaning the
+#'   fitted result uses rows `(L1, ..., LJ, R1, ..., RJ)`. Other layouts should
+#'   be reordered before fitting; unsupported values are rejected by
+#'   [base::match.arg()].
 #'
 #' @return A list with elements `h2`, `H2`, and `pieces`.
 #' @export

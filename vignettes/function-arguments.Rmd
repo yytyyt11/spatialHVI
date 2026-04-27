@@ -1,0 +1,327 @@
+---
+title: "Function Argument Guide"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Function Argument Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This guide explains the main `spatialHVI` function arguments in the same
+notation used by the manuscript. It is a practical supplement to the function
+help pages, with emphasis on data layout, sample ordering, trait ordering, and
+common mistakes.
+
+## Manuscript notation and object layout
+
+| Symbol or object | Meaning in the model | R object layout |
+|---|---|---|
+| `Y` | Phenotype matrix | Numeric `C x n` matrix: traits in rows, subjects in columns |
+| `C` | Number of individual traits | Even integer, because traits are left/right pairs |
+| `J` | Number of paired ROIs | `J = C / 2`; one row/column of `A` per pair |
+| `K` | Kinship or genomic relationship matrix | Numeric `n x n` matrix in the same subject order as columns of `Y` |
+| `A` | Pair-level spatial adjacency | Numeric `J x J` matrix; entry `(i, j)` links ROI pair `i` and pair `j` |
+| `D_A` | Degree matrix of `A` | Diagonal matrix formed from row sums of `A` |
+| `rho` | Spatial dependence parameter | Discrete candidate values supplied by `rho_grid` |
+| `Sigma` | Left/right residual covariance | `2 x 2` covariance matrix for paired hemispheres |
+| `sigma2_gc` | Trait-specific genetic variance | One value for each trait row `c = 1, ..., C` |
+| `h2` | Trait-wise narrow-sense heritability | Length-`C` vector returned by `heritability_from_vi()` |
+| `H2` | Global principal-component heritability | Scalar returned by `heritability_from_vi()` |
+
+The fitting functions assume halves order:
+
+```r
+Y rows: L1, L2, ..., LJ, R1, R2, ..., RJ
+```
+
+Alternating pair order is different:
+
+```r
+Y rows: L1, R1, L2, R2, ..., LJ, RJ
+```
+
+Real-data readers can reorder alternating pairs when `trait_order = "pairs"` or
+when `trait_order = "auto"` detects left/right names. The matrix fitting
+functions `run_vi_hetero_from_mats()` and `run_vi_homo_from_mats()` do not
+reorder `y`; they expect halves order before fitting.
+
+## Function categories
+
+| Category | Main functions | Purpose |
+|---|---|---|
+| Matrix construction | `build_kinship_matrix()`, `make_a_knn()`, `build_a_from_y_halves()` | Construct `K` and `A` inputs |
+| Simulation | `simulate_halves_batch()` | Generate simulated `Y`, random effects, residuals, and `A` from SNP files |
+| VI fitting | `run_vi_hetero_from_mats()`, `run_vi_homo_from_mats()` | Fit the Bayesian spatial heritability model from matrices |
+| Simulation fitting | `fit_simulation_case_halves()`, `run_simulation_batch_halves()` | Fit simulated datasets and summarize outputs |
+| Real-data workflow | `run_realdata_brain_hetero_halves()`, `run_realdata_halves_from_files()` | Read phenotype/genotype/kinship data, align samples, fit VI |
+| Results | `save_vi_result()`, `heritability_from_vi()` | Save posterior summaries and compute heritability |
+
+## Matrix construction functions
+
+### `build_kinship_matrix(snp_matrix, normalize_diag = FALSE)`
+
+Purpose: construct the kinship matrix `K` from SNP dosages `X` by centering and
+scaling SNP columns and returning `XX^T / L`.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `snp_matrix` | Numeric matrix `X` with subjects in rows and SNPs in columns. The row order becomes the subject order of `K` and must match the column order of `Y` in later fitting. Typical entries are additive dosages such as 0, 1, and 2. Do not include ID columns such as `PTID`, sex, age, or phenotype columns. If non-SNP columns are included, `K` is wrong or numeric conversion fails. |
+| `normalize_diag` | Logical scalar. `FALSE` returns the raw centered/scaled `XX^T / L`; `TRUE` divides by the mean diagonal so average self-relatedness is one. The VI fitting functions normalize `K` internally, so the default is fine for package workflows. Use `TRUE` for standalone reporting or comparison with other relationship matrices. |
+
+### `make_a_knn(j_pairs, k = 2, sigma = 1, seed = NULL)`
+
+Purpose: simulate a pair-level adjacency matrix `A` for `J` ROI pairs using
+random two-dimensional coordinates and a k-nearest-neighbor graph.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `j_pairs` | Positive integer `J = C / 2`, the number of left/right ROI pairs. The returned matrix is `J x J`, not `C x C`. If this does not match the number of phenotype pairs, downstream `A` dimension checks fail. |
+| `k` | Positive integer number of nearest neighbors kept for each pair. Default `2` gives a sparse graph. Increase for denser spatial dependence. Values above `J - 1` are effectively capped by available neighbors. |
+| `sigma` | Positive numeric bandwidth for converting distances to weights. Default `1` gives moderate decay. Smaller values make weights decay faster; larger values make retained edges more similar. Non-positive or non-finite values can create invalid weights. |
+| `seed` | Optional integer seed for reproducible simulated coordinates and adjacency. Default `NULL` uses the current RNG state. Set it when simulations must be exactly repeatable. |
+
+### `build_a_from_y_halves(y, k = 2, trait_order = c("auto", "halves", "pairs"))`
+
+Purpose: estimate `A` from phenotype correlations across paired left/right
+traits.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `y` | Numeric phenotype matrix `Y` with traits in rows and subjects in columns. It must have `C = 2J` rows. Subject columns must be in a consistent order across all trait rows. If traits are stored in columns, the estimated adjacency is invalid or the even-row check fails. |
+| `k` | Positive integer number of neighbors retained for each ROI pair. Default `2` gives a sparse phenotype-derived graph. Increase when residual dependence is expected to be broad; decrease when only the strongest relationships should define `A`. |
+| `trait_order` | `"auto"` inspects row names with left/right prefixes and reorders alternating pair names if detected; otherwise it assumes halves order. `"halves"` means rows are already `L1, ..., LJ, R1, ..., RJ`. `"pairs"` means rows are `L1, R1, L2, R2, ...` and are internally reordered only for building `A`. Supplying the wrong order links the wrong ROI pairs. |
+
+## Simulation function
+
+### `simulate_halves_batch(group_cfgs, sigma_block, base_dir = ".", summary_path = file.path(base_dir, "batch_generation_summary.csv"), snp_pattern = "^SNP[0-9]+\\.csv$", seed_offset = 777)`
+
+Purpose: generate simulated halves-ordered phenotype matrices from SNP files.
+Each matched SNP file produces a subdirectory containing `simulated_phenotypes.csv`,
+`random_effects.csv`, `residuals.csv`, and `A_used.csv`.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `group_cfgs` | Named list. Each name must match a group directory under `base_dir`. Each group config needs `c_traits` or `C`, `rho`, `knn_k`, `knn_sigma`, `seed_a` or `seedA`, and `sigma2_pairs`. `c_traits` is `C` and must be even. `rho` is the simulation value of the spatial dependence parameter. `sigma2_pairs` gives genetic variances for `J = C / 2` pairs and is expanded to left and right traits. Missing fields or odd `C` stop generation. |
+| `sigma_block` | Numeric `2 x 2` residual covariance matrix `Sigma` for left/right traits within each pair. It is combined with `(D_A - rho A)^(-1)` to form the residual covariance. Wrong dimensions stop immediately; non-positive-definite values can make Gaussian simulation fail. |
+| `base_dir` | Character directory containing the named group folders. Default `"."` uses the current directory. Outputs are written into per-SNP subdirectories inside each group directory. |
+| `summary_path` | Optional CSV path for the generation summary. Default writes `batch_generation_summary.csv` under `base_dir`. Use `NULL` to skip writing. Existing files are overwritten. |
+| `snp_pattern` | Regular expression for SNP input files inside each group directory. Default matches names like `SNP1.csv`. Each file should contain a numeric subject-by-SNP matrix. Do not include sample ID columns. |
+| `seed_offset` | Integer base seed offset for replicate-level random effects and residuals. Default `777` supports reproducibility. Change it to generate a different replicate while keeping group-level config fixed. |
+
+## VI fitting functions
+
+### `run_vi_hetero_from_mats(y, k_mat, a_mat = NULL, rho_grid = seq(0, 0.99, by = 0.01), max_iter = 5000, tol = 1e-4, verbose = TRUE)`
+
+Purpose: fit the heteroscedastic model, where each trait has its own genetic
+variance parameter `sigma2_gc`.
+
+Model inputs:
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `y` | Numeric phenotype matrix `Y`, dimension `C x n`, traits in rows and subjects in columns. Rows must already be halves ordered. Columns must be in the same subject order as `k_mat`. If `Y` is transposed, dimensions will not represent the manuscript model. |
+| `k_mat` | Numeric kinship matrix `K`, dimension `n x n`, same subject order as columns of `y`. It is normalized internally. A dimension mismatch stops; a permuted order produces invalid genetic effects. |
+| `a_mat` | Optional pair-level adjacency `A`, dimension `J x J` with `J = C / 2`. If `NULL`, `A` is estimated from `y`. Supply anatomical or simulation `A` when it should define the residual precision. Wrong dimensions stop; wrong pair order changes the spatial model. |
+| `rho_grid` | Numeric candidate grid for `rho`. The posterior for `rho` is represented as weights over this grid after filtering values that make `D_A - rho A` invalid. The default `0` to `0.99` by `0.01` is broad. A finer grid improves resolution but costs more computation. |
+
+Optimization controls:
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `max_iter` | Positive integer iteration cap. Default `5000`. Increase if ELBO has not stabilized; reduce for tests. |
+| `tol` | Non-negative ELBO stopping tolerance. Default `1e-4`. Set `0` to force running to `max_iter`. Large values stop early. |
+| `verbose` | Logical scalar controlling ELBO messages. Default `TRUE`. Use `FALSE` for batch jobs. |
+
+### `run_vi_homo_from_mats(y, k_mat, a_mat = NULL, rho_grid = seq(0, 0.99, by = 0.01), max_iter = 5000, tol = 1e-4, verbose = TRUE)`
+
+Purpose: fit the homoscedastic model, where all traits share one genetic
+variance parameter. The data layout and controls are the same as
+`run_vi_hetero_from_mats()`.
+
+Use the homoscedastic model when a single genetic variance scale across traits
+is scientifically intended or when a simpler baseline is needed. Use the
+heteroscedastic model when trait-specific genetic variance is important.
+
+## Simulation fitting functions
+
+### `fit_simulation_case_halves(y, k_mat, a_true, rho_grid = seq(0, 0.99, by = 0.01), max_iter = 5000, tol = 1e-4, verbose = TRUE, prefix = NULL)`
+
+Purpose: fit one simulated dataset using the known simulation adjacency and
+return both the VI result and heritability summary.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `y` | Numeric simulated phenotype matrix `Y`, dimension `C x n`, halves ordered. Usually read from `simulated_phenotypes.csv`. |
+| `k_mat` | Numeric `n x n` kinship matrix `K` in the same subject order as columns of `y`, usually rebuilt from the corresponding SNP file. |
+| `a_true` | Numeric `J x J` adjacency matrix `A` used to generate the simulated data, usually from `A_used.csv`. It is used both for fitting and heritability calculation. |
+| `rho_grid` | Candidate grid for `rho`. Use the same grid across cases when comparing simulation results. |
+| `max_iter` | Maximum VI iterations for this case. |
+| `tol` | ELBO convergence tolerance. |
+| `verbose` | Whether to print ELBO progress. |
+| `prefix` | Optional output prefix passed to `save_vi_result()`. `NULL` skips writing. Existing files with the same prefix are overwritten. |
+
+### `run_simulation_batch_halves(group_dir, resume_from_snp = 1L, skip_completed = FALSE, rho_grid = seq(0, 0.99, by = 0.01), max_iter = 5000, tol = 1e-4, verbose = TRUE, result_stub = "vi_halves_fast", summary_path = file.path(group_dir, paste0(result_stub, "_summary.csv")), snp_pattern = "^SNP[0-9]+\\.csv$")`
+
+Purpose: fit every generated SNP dataset in one simulation group directory.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `group_dir` | Path to a group directory containing SNP files and per-SNP output folders. For `SNP1.csv`, the function expects `SNP1/simulated_phenotypes.csv` and `SNP1/A_used.csv`. |
+| `resume_from_snp` | Positive integer resume point. Default `1` fits all SNPs. Set to a larger id to skip earlier SNP files after a partial run. |
+| `skip_completed` | Logical. If `TRUE`, existing full result RDS files are reused. Useful for resuming, but unsafe if inputs, `rho_grid`, or code changed. |
+| `rho_grid` | Candidate grid for `rho`, passed to every SNP fit. Keep fixed across SNPs for comparable summaries. |
+| `max_iter` | Maximum VI iterations per SNP. |
+| `tol` | ELBO tolerance per SNP. |
+| `verbose` | Whether to print optimizer progress for each SNP. |
+| `result_stub` | File-name stem for output files in each SNP folder. Default produces files such as `vi_halves_fast_full_result.rds`. Change it to keep multiple analyses side by side. |
+| `summary_path` | Optional summary CSV path. Default writes in `group_dir`. Use `NULL` to return without writing. Existing files are overwritten. |
+| `snp_pattern` | Regular expression for SNP input files. Default expects `SNP<integer>.csv`; changing it may break numeric SNP ordering if ids cannot be parsed. |
+
+## Real-data workflow functions
+
+### `run_realdata_brain_hetero_halves()`
+
+Purpose: read a brain phenotype CSV, align it with either genotype data `X` or
+a precomputed kinship matrix `K`, fit the heteroscedastic model, and return
+aligned inputs plus posterior summaries.
+
+Phenotype arguments:
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `brain_csv` | Path to the phenotype CSV containing `Y`. Use `phenotype_layout` to say whether traits or samples are in rows. Non-numeric phenotype columns after ID removal stop the workflow. |
+| `brain_row_names` | Whether the first CSV column should be read as row names. Default `TRUE` is common when the first column stores trait names. Set `FALSE` if the first column is real data. |
+| `phenotype_layout` | `"auto"` infers layout from left/right trait names; `"traits_in_rows"` means the CSV is already `C x n`; `"samples_in_rows"` means rows are subjects and columns are traits. Set manually if auto-detection is ambiguous. |
+| `phenotype_id_col` | Sample ID column when samples are in rows. It is removed before numeric phenotype conversion and used for alignment. |
+| `phenotype_sample_ids` | Sample IDs for columns when traits are in rows and CSV column names are generic. Length must equal the number of subject columns. |
+| `trait_order` | `"auto"` detects and converts pair order if row names allow it; `"halves"` means `L1, ..., LJ, R1, ..., RJ`; `"pairs"` means `L1, R1, L2, R2, ...`. Wrong values pair left/right traits incorrectly. |
+| `na_action` | `"error"` stops on missing phenotype values. `"zero"` replaces missing values with zero before optional scaling and should be used only with justification. |
+| `zscore_rows` | If `TRUE`, standardize each trait row across subjects. This matches the standardized phenotype convention. Set `FALSE` only for already standardized or intentionally raw-scale inputs. |
+
+Kinship and genotype arguments:
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `use_k_from` | `"X"` constructs `K` from genotype dosages; `"K"` uses a precomputed kinship matrix. |
+| `X` | Matrix or data frame with subjects in rows and SNPs in columns. It may include an ID column and non-SNP columns, but SNP columns must be selected correctly. |
+| `K` | Square numeric subject-by-subject kinship matrix or data frame. Row/column order must align with phenotype subjects. |
+| `x_ids` | Optional sample IDs for `X` when not stored in row names or an ID column. |
+| `k_ids` | Optional sample IDs for `K` when not stored in row/column names. |
+| `x_id_col` | Sample ID column inside `X`, such as `PTID`. It is removed before SNP selection. |
+| `x_snp_cols` | Explicit SNP column names or indices after removing `x_id_col`. Use this when numeric covariates or phenotype columns are also present. |
+| `x_snp_pattern` | Regex for SNP column names when explicit selection and annotation are absent. Default `"^rs"` targets rsID-style names. |
+| `x_annotation` | Optional SNP annotation data frame used to match SNP names before regex fallback. |
+| `annotation_rsid_col` | Column in `x_annotation` containing SNP identifiers that should match `X` column names. |
+| `allow_row_order_alignment` | If `TRUE`, allow alignment by current row/column order when no IDs are available. This is risky for real data. Set `FALSE` when you require ID-based alignment. |
+
+Model and output arguments:
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `a_mat` | Optional `J x J` adjacency `A`. If `NULL`, estimate `A` from the aligned and optionally standardized `Y` using `k_knn`. |
+| `k_knn` | Neighbor count for phenotype-derived `A` when `a_mat = NULL`. |
+| `rho_grid` | Candidate grid for `rho`. |
+| `max_iter` | Maximum VI iterations. Default is higher for real data than for examples. |
+| `tol` | ELBO convergence tolerance. |
+| `verbose` | Whether to print ELBO progress. |
+| `prefix` | Optional output prefix for saved posterior summaries. `NULL` skips writing. |
+| `make_plot` | Whether to plot the ELBO trace after fitting. |
+| `show_summary` | Whether to print a concise heritability summary after fitting. |
+
+### `run_realdata_halves_from_files()`
+
+Purpose: load a phenotype CSV and an `.RData` file, select the genotype,
+kinship, and annotation objects, then call `run_realdata_brain_hetero_halves()`.
+
+File and object arguments:
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `brain_csv` | Same phenotype CSV as above. |
+| `rdata_path` | Path to an `.RData` file. It should contain a genotype object `X`, a kinship object `K`, and/or an annotation object. |
+| `use_k_from` | `"auto"` detects a kinship-like object first and otherwise uses a genotype-like object. `"X"` forces genotype-based `K`; `"K"` forces precomputed `K`. Manual selection is safer when the file contains multiple matrix-like objects. |
+| `x_object` | Object name in the `.RData` file for genotype data `X`. It must be matrix-like with subjects in rows. |
+| `k_object` | Object name in the `.RData` file for a precomputed square kinship matrix `K`. |
+| `genotype_object` | Backward-compatible alias for `x_object`; prefer `x_object` in new code. |
+| `annotation_object` | Object name for a SNP annotation data frame, typically with an `RSID` column. |
+| `genotype_rows` | Optional row indices for subsetting subjects in `X`, or both rows and columns in `K`. Use only if the subset order is known to match the phenotype data. |
+| `genotype_cols` | Backward-compatible SNP column selection passed to `x_snp_cols` when `x_snp_cols` is `NULL`. |
+
+All other phenotype, SNP-selection, alignment, model-control, and output
+arguments have the same meaning as in `run_realdata_brain_hetero_halves()`.
+
+## Result functions
+
+### `save_vi_result(res, prefix = "vi_result")`
+
+Purpose: write posterior summaries from a VI fit to disk.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `res` | Result list returned by `run_vi_hetero_from_mats()` or `run_vi_homo_from_mats()`. It must include posterior weights for `rho`, genetic variance summaries, residual covariance summaries, random-effect means, and covariance diagnostics. A partial list stops with a missing-field error. |
+| `prefix` | Output file prefix, not just a directory. Default writes `vi_result_*` files in the current directory. Parent directories are created. Existing files with the same names are overwritten. |
+
+### `heritability_from_vi(res, a_mat = NULL, pairing = c("halves"))`
+
+Purpose: compute trait-wise narrow-sense heritability `h2` and the global
+principal-component heritability summary `H2`.
+
+| Argument | Meaning, format, and guidance |
+|---|---|
+| `res` | VI result list. It provides posterior estimates of `sigma2_gc`, `Sigma`, `rho`, and `A`. The fitted traits must be halves ordered and even in number. |
+| `a_mat` | Optional `J x J` adjacency `A`. If `NULL`, use `res$A`. Supply this when you want heritability computed with a known simulation or anatomical adjacency. Wrong pair order changes the residual variance terms; wrong dimension stops. |
+| `pairing` | Currently only `"halves"` is supported. It means trait rows are interpreted as `L1, ..., LJ, R1, ..., RJ`. Reorder data before fitting if it is not in this layout. |
+
+## Common input examples
+
+Traits in rows:
+
+```r
+Y <- matrix(rnorm(4 * 8), nrow = 4)
+rownames(Y) <- c("Left_A", "Left_B", "Right_A", "Right_B")
+# C = 4 traits, J = 2 pairs, n = 8 subjects
+```
+
+Samples in rows:
+
+```r
+brain_df <- data.frame(
+  PTID = paste0("ID", 1:8),
+  Left_A = rnorm(8),
+  Right_A = rnorm(8),
+  Left_B = rnorm(8),
+  Right_B = rnorm(8)
+)
+# Use phenotype_layout = "samples_in_rows" and phenotype_id_col = "PTID".
+```
+
+Genotype input:
+
+```r
+X <- data.frame(
+  PTID = paste0("ID", 1:8),
+  rs1 = sample(0:2, 8, replace = TRUE),
+  rs2 = sample(0:2, 8, replace = TRUE)
+)
+# Use x_id_col = "PTID"; only rs* columns should enter K.
+```
+
+Precomputed kinship:
+
+```r
+K <- diag(8)
+rownames(K) <- colnames(K) <- paste0("ID", 1:8)
+# The ID order should match or be alignable to phenotype sample IDs.
+```
+
+## Common mistakes and consequences
+
+| Mistake | Consequence | Safer practice |
+|---|---|---|
+| Traits are stored in columns but passed directly as `y` to `run_vi_*_from_mats()` | The model axes are wrong, or `K` dimension checks fail | Transpose to `C x n`, or use a real-data reader with `phenotype_layout = "samples_in_rows"` |
+| `Y` columns and `K` rows/columns use different subject orders | Genetic random effects are assigned to the wrong subjects; heritability is invalid | Use explicit sample IDs and set `allow_row_order_alignment = FALSE` for real data |
+| `PTID` or another ID column is treated as a SNP | Kinship matrix is contaminated or numeric conversion fails | Set `x_id_col = "PTID"` and/or explicit `x_snp_cols` |
+| Halves order and alternating pair order are confused | Left/right residual covariance and pair-level adjacency link the wrong traits | Use `trait_order = "pairs"` in real-data readers, or manually reorder before matrix fitting |
+| `rho_grid` is too coarse | Posterior `E_rho` is grid-limited and may hide uncertainty | Use a finer grid around plausible spatial dependence values |
+| `a_mat` is `C x C` instead of `J x J` | Dimension check stops | Build `A` on ROI pairs, not individual left/right traits |
+| Missing phenotype values are zero-filled without justification | Trait covariance and estimated `A` can be distorted | Prefer `na_action = "error"` and impute upstream if needed |

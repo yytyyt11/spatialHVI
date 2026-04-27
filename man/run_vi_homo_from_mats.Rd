@@ -15,21 +15,51 @@ run_vi_homo_from_mats(
 )
 }
 \arguments{
-\item{y}{A numeric matrix with traits in rows and subjects in columns, ordered
-as \verb{(L1, ..., LJ, R1, ..., RJ)}.}
+\item{y}{Numeric phenotype matrix \eqn{Y} with traits in rows and subjects in
+columns. In manuscript notation this is the \eqn{C \times n} phenotype
+matrix, where \eqn{C = 2J} is even and \eqn{n} is the number of subjects.
+Rows must already be in halves order \verb{(L1, ..., LJ, R1, ..., RJ)};
+this function does not reorder traits. In the homoscedastic model, all
+trait rows share one genetic variance component, so a wrong trait layout
+affects the common genetic variance estimate as well as the residual
+spatial covariance. The column order must match the subject order in
+\code{k_mat}.}
 
-\item{k_mat}{A subject-by-subject kinship matrix.}
+\item{k_mat}{Numeric kinship matrix \eqn{K} with dimension \eqn{n \times n}.
+Rows and columns represent subjects in exactly the same order as the
+columns of \code{y}. The matrix is symmetrized and scaled internally to have
+mean diagonal one. Use \code{\link[=build_kinship_matrix]{build_kinship_matrix()}} for SNP-derived kinship or
+provide a precomputed genomic relationship matrix. A dimension mismatch
+stops the fit; a permuted subject order invalidates the genetic random
+effect covariance.}
 
-\item{a_mat}{Optional \code{J} by \code{J} adjacency matrix. When \code{NULL}, it is estimated
-from \code{y}.}
+\item{a_mat}{Optional numeric pair-level spatial adjacency matrix \eqn{A}
+with dimension \eqn{J \times J}, where \eqn{J = C/2}. It defines
+neighborhood weights among ROI pairs in the residual precision
+\eqn{D_A - \rho A}; the diagonal is treated as zero and the matrix is
+spectrally normalized internally. When \code{NULL}, \code{A} is estimated from \code{y}
+using \code{\link[=build_a_from_y_halves]{build_a_from_y_halves()}}. Provide \code{a_mat} when an anatomical,
+simulation, or otherwise fixed pair-level adjacency should be used.}
 
-\item{rho_grid}{Candidate rho values.}
+\item{rho_grid}{Numeric vector of candidate values for the spatial dependence
+parameter \eqn{\rho}. The variational posterior for \eqn{\rho} is stored as
+weights over this discrete grid after excluding values that make
+\eqn{D_A - \rho A} non-positive-definite. The default
+\code{seq(0, 0.99, by = 0.01)} searches nonnegative spatial dependence. Use a
+narrower or denser grid for sensitivity analysis or faster focused fits.}
 
-\item{max_iter}{Maximum number of VI iterations.}
+\item{max_iter}{Positive integer maximum number of coordinate-ascent VI
+iterations. The default \code{5000} is intended for routine matrix fits.
+Increase it if ELBO diagnostics still change at the limit; reduce it for
+examples or smoke tests.}
 
-\item{tol}{Absolute ELBO tolerance used for convergence.}
+\item{tol}{Non-negative numeric ELBO convergence tolerance. Iteration stops
+when the absolute ELBO change is below \code{tol}; the default is \code{1e-4}. Use
+\code{0} to force running to \code{max_iter}. Larger values stop earlier but may
+return a less stable homoscedastic posterior.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints ELBO progress.}
+\item{verbose}{Logical scalar. If \code{TRUE} (default), print per-iteration ELBO
+progress. Set \code{FALSE} for scripts, tests, or large batches.}
 }
 \value{
 A list containing posterior summaries, ELBO history, and fitted

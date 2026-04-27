@@ -18,28 +18,57 @@ run_simulation_batch_halves(
 )
 }
 \arguments{
-\item{group_dir}{Path to a simulation group directory.}
+\item{group_dir}{Character scalar path to one simulation group directory,
+such as a directory containing \code{SNP1.csv}, \code{SNP2.csv}, and per-SNP
+subdirectories produced by \code{\link[=simulate_halves_batch]{simulate_halves_batch()}}. For each matched SNP
+file, the function expects \verb{group_dir/SNP*/simulated_phenotypes.csv} with
+\eqn{Y} in \eqn{C \times n} layout and \verb{group_dir/SNP*/A_used.csv} with
+the corresponding \eqn{J \times J} adjacency matrix. The genotype SNP file
+itself is read to rebuild \eqn{K}. Missing required files cause that SNP to
+be skipped.}
 
-\item{resume_from_snp}{Integer SNP id used as a resume point.}
+\item{resume_from_snp}{Positive integer SNP id used as a resume point. The
+default \code{1L} fits all matched SNP files. Set, for example,
+\code{resume_from_snp = 100} to skip \code{SNP1.csv} through \code{SNP99.csv} after a
+partial batch run.}
 
-\item{skip_completed}{Logical; if \code{TRUE}, reuse existing saved results when
-available.}
+\item{skip_completed}{Logical scalar. If \code{TRUE}, an existing
+\code{"<result_stub>_full_result.rds"} file inside a SNP output directory is read
+instead of refitting that SNP. This is useful for resuming long batches, but
+risky if fitting settings, package version, \code{rho_grid}, or inputs changed
+since the saved result was created. The default \code{FALSE} refits from inputs.}
 
-\item{rho_grid}{Candidate rho values.}
+\item{rho_grid}{Numeric candidate grid for the spatial dependence parameter
+\eqn{\rho}; passed to \code{\link[=fit_simulation_case_halves]{fit_simulation_case_halves()}}. The default
+\code{seq(0, 0.99, by = 0.01)} is broad. Use the same grid across SNPs when
+comparing posterior \code{E_rho} values.}
 
-\item{max_iter}{Maximum number of VI iterations.}
+\item{max_iter}{Positive integer maximum VI iterations per SNP dataset.
+Default \code{5000}. Reduce for debugging; increase for difficult batches whose
+ELBO traces do not stabilize.}
 
-\item{tol}{Absolute ELBO tolerance used for convergence.}
+\item{tol}{Non-negative numeric ELBO tolerance per SNP fit. Default \code{1e-4};
+set to \code{0} for fixed-iteration simulation experiments.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints ELBO progress.}
+\item{verbose}{Logical scalar controlling per-iteration ELBO messages from
+each SNP fit. Default \code{TRUE}; set \code{FALSE} for production batch logs.}
 
-\item{result_stub}{File-name stem used for saved result files inside each SNP
-output folder.}
+\item{result_stub}{Character scalar file-name stem for result files written
+inside each per-SNP output folder. The default \code{"vi_halves_fast"} creates
+files such as \code{vi_halves_fast_full_result.rds} and
+\code{vi_halves_fast_rho_posterior.csv}. Changing this lets multiple analyses
+coexist in the same SNP directories.}
 
-\item{summary_path}{Optional CSV path for the summary table. Use \code{NULL} to skip
-writing the summary to disk.}
+\item{summary_path}{Optional character path for the batch summary CSV. The
+default writes \code{"<result_stub>_summary.csv"} inside \code{group_dir}; \code{NULL}
+returns the data frame without writing a summary. Existing files are
+overwritten.}
 
-\item{snp_pattern}{Regular expression used to detect SNP input files.}
+\item{snp_pattern}{Character regular expression used to select SNP input
+files in \code{group_dir}. The default \code{"^SNP[0-9]+\\\\.csv$"} expects names such
+as \code{SNP1.csv}. Change it only when your simulation files use a different
+naming convention; the numeric SNP id must still be recoverable by the
+package's \verb{SNP<integer>.csv} parser.}
 }
 \value{
 A data frame summarizing the fitted SNP datasets.

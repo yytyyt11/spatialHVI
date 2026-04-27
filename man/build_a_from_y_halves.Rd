@@ -7,13 +7,29 @@
 build_a_from_y_halves(y, k = 2, trait_order = c("auto", "halves", "pairs"))
 }
 \arguments{
-\item{y}{A numeric trait matrix with paired traits in rows and subjects in columns.}
+\item{y}{Numeric phenotype matrix \eqn{Y} with paired traits in rows and
+subjects in columns. The matrix must have an even number of rows
+\eqn{C = 2J}. This function uses the similarity of left-hemisphere rows and
+right-hemisphere rows across the same subjects to construct the pair-level
+adjacency \eqn{A}. Subject columns must therefore be in a consistent order
+within all rows, although no kinship matrix is used here. If traits are in
+columns instead of rows, the inferred adjacency will be meaningless or the
+even-row check will fail.}
 
-\item{k}{Number of neighbors retained for each pair.}
+\item{k}{Positive integer number of neighbors retained for each ROI pair in
+the estimated adjacency graph. The default \code{2} produces a sparse
+correlation-based graph. Increase it when the expected residual spatial
+dependence is broader; decrease it when only the strongest local
+relationships should be retained.}
 
-\item{trait_order}{Trait ordering. Use \code{"halves"} for
-\verb{(L1, ..., LJ, R1, ..., RJ)}, \code{"pairs"} for \verb{(L1, R1, L2, R2, ...)}, or
-\code{"auto"} to infer the order from trait names when available.}
+\item{trait_order}{Character scalar describing how paired trait rows are
+arranged before building \eqn{A}. \code{"auto"} (default) inspects row names with
+left/right prefixes and treats detected alternating names as \code{"pairs"};
+otherwise it assumes \code{"halves"}. \code{"halves"} means rows are already
+\verb{(L1, ..., LJ, R1, ..., RJ)}. \code{"pairs"} means rows are alternating
+\verb{(L1, R1, L2, R2, ...)} and are internally reordered to halves order for
+adjacency construction. Supplying the wrong order connects the wrong ROI
+pairs and can bias the spatial residual precision \eqn{D_A - \rho A}.}
 }
 \value{
 A normalized \code{J} by \code{J} adjacency matrix.

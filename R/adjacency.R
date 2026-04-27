@@ -107,10 +107,25 @@ make_uniform_rho_prior_valid <- function(a_mat, d_a, rho_grid) {
 #'
 #' Generates a symmetric adjacency matrix from random two-dimensional coordinates.
 #'
-#' @param j_pairs Number of paired regions of interest.
-#' @param k Number of nearest neighbors retained for each region.
-#' @param sigma Bandwidth used when converting distances to edge weights.
-#' @param seed Optional integer seed.
+#' @param j_pairs Positive integer number of paired regions of interest
+#'   \eqn{J = C/2}. The returned adjacency matrix has one row and column per
+#'   left/right ROI pair, not one row per individual left or right trait. This
+#'   must match the pair dimension used by halves-ordered phenotype matrices
+#'   with \eqn{C = 2J} rows.
+#' @param k Positive integer number of nearest neighbors retained for each ROI
+#'   pair when constructing the pair-level adjacency \eqn{A}. The default `2`
+#'   creates a sparse local graph. Increase `k` for denser spatial dependence or
+#'   decrease it for very local dependence; values larger than `j_pairs - 1` are
+#'   effectively capped by the available neighbors.
+#' @param sigma Positive numeric bandwidth for converting squared distances
+#'   between simulated two-dimensional coordinates into edge weights through a
+#'   Gaussian kernel. The default `1` gives moderate decay. Smaller values make
+#'   non-nearest edges weaker; larger values make retained edges more similar.
+#'   Non-positive or non-finite values can produce invalid adjacency weights.
+#' @param seed Optional integer random seed used only for generating the
+#'   temporary two-dimensional coordinates. The default `NULL` leaves the
+#'   current RNG state unchanged. Set a seed when a simulation group must use a
+#'   reproducible adjacency matrix.
 #'
 #' @return A symmetric `j_pairs` by `j_pairs` adjacency matrix.
 #' @export
@@ -166,11 +181,27 @@ make_a_knn <- function(j_pairs, k = 2, sigma = 1, seed = NULL) {
 #' halves order `(L1, ..., LJ, R1, ..., RJ)` or in alternating pair order
 #' `(L1, R1, L2, R2, ...)`.
 #'
-#' @param y A numeric trait matrix with paired traits in rows and subjects in columns.
-#' @param k Number of neighbors retained for each pair.
-#' @param trait_order Trait ordering. Use `"halves"` for
-#'   `(L1, ..., LJ, R1, ..., RJ)`, `"pairs"` for `(L1, R1, L2, R2, ...)`, or
-#'   `"auto"` to infer the order from trait names when available.
+#' @param y Numeric phenotype matrix \eqn{Y} with paired traits in rows and
+#'   subjects in columns. The matrix must have an even number of rows
+#'   \eqn{C = 2J}. This function uses the similarity of left-hemisphere rows and
+#'   right-hemisphere rows across the same subjects to construct the pair-level
+#'   adjacency \eqn{A}. Subject columns must therefore be in a consistent order
+#'   within all rows, although no kinship matrix is used here. If traits are in
+#'   columns instead of rows, the inferred adjacency will be meaningless or the
+#'   even-row check will fail.
+#' @param k Positive integer number of neighbors retained for each ROI pair in
+#'   the estimated adjacency graph. The default `2` produces a sparse
+#'   correlation-based graph. Increase it when the expected residual spatial
+#'   dependence is broader; decrease it when only the strongest local
+#'   relationships should be retained.
+#' @param trait_order Character scalar describing how paired trait rows are
+#'   arranged before building \eqn{A}. `"auto"` (default) inspects row names with
+#'   left/right prefixes and treats detected alternating names as `"pairs"`;
+#'   otherwise it assumes `"halves"`. `"halves"` means rows are already
+#'   `(L1, ..., LJ, R1, ..., RJ)`. `"pairs"` means rows are alternating
+#'   `(L1, R1, L2, R2, ...)` and are internally reordered to halves order for
+#'   adjacency construction. Supplying the wrong order connects the wrong ROI
+#'   pairs and can bias the spatial residual precision \eqn{D_A - \rho A}.
 #'
 #' @return A normalized `J` by `J` adjacency matrix.
 #' @export

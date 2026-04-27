@@ -77,9 +77,22 @@ safe_scale_rows <- function(y) {
 #' Centers and scales SNP columns and returns \eqn{XX^T / L}, where \eqn{L} is
 #' the number of SNP columns.
 #'
-#' @param snp_matrix A numeric matrix with subjects in rows and SNPs in columns.
-#' @param normalize_diag Logical; if `TRUE`, divide the result by the mean of its
-#'   diagonal.
+#' @param snp_matrix Numeric SNP dosage matrix \eqn{X} with subjects in rows and
+#'   SNPs or genetic markers in columns. In the model workflow this matrix is
+#'   used only to construct the kinship matrix \eqn{K = XX^T / L}, where
+#'   \eqn{L} is the number of SNP columns after centering and scaling each
+#'   column. The row order becomes the subject order of \eqn{K} and must match
+#'   the column order of the phenotype matrix \eqn{Y} used later in
+#'   [run_vi_hetero_from_mats()] or [run_vi_homo_from_mats()]. Do not include
+#'   sample ID columns such as `PTID` or non-SNP annotations; because the input
+#'   is coerced to a numeric matrix, such columns can cause conversion errors or
+#'   contaminate the genetic similarity calculation.
+#' @param normalize_diag Logical scalar. If `FALSE` (default), return the raw
+#'   centered-and-scaled relationship matrix \eqn{XX^T / L}. If `TRUE`, divide
+#'   the matrix by its mean diagonal so the average self-relatedness is one.
+#'   The VI fitting functions normalize `k_mat` internally, so the default is
+#'   sufficient for package workflows; set `TRUE` when exporting or inspecting a
+#'   standalone kinship matrix on the common mean-diagonal-one scale.
 #'
 #' @return A symmetric numeric matrix.
 #' @export

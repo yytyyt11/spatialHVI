@@ -2,15 +2,52 @@
 #'
 #' Fits the fast exact variational inference model for halves-ordered traits.
 #'
-#' @param y A numeric matrix with traits in rows and subjects in columns, ordered
-#'   as `(L1, ..., LJ, R1, ..., RJ)`.
-#' @param k_mat A subject-by-subject kinship matrix.
-#' @param a_mat Optional `J` by `J` adjacency matrix. When `NULL`, it is estimated
-#'   from `y`.
-#' @param rho_grid Candidate rho values.
-#' @param max_iter Maximum number of VI iterations.
-#' @param tol Absolute ELBO tolerance used for convergence.
-#' @param verbose Logical; if `TRUE`, prints ELBO progress.
+#' @param y Numeric phenotype matrix \eqn{Y} with traits in rows and subjects in
+#'   columns. In the manuscript notation this is the \eqn{C \times n} phenotype
+#'   matrix, where \eqn{C = 2J} is even and \eqn{n} is the number of subjects.
+#'   The rows must already be in halves order `(L1, ..., LJ, R1, ..., RJ)`;
+#'   this fitting function does not reorder `y`. The column order must be the
+#'   same subject order used in `k_mat`. If traits are supplied in columns,
+#'   rows are in alternating pair order, or subjects are not aligned with
+#'   `k_mat`, the fitted genetic and residual covariance quantities will refer
+#'   to the wrong model axes or the function will stop on a dimension check.
+#' @param k_mat Numeric kinship matrix \eqn{K} with dimension \eqn{n \times n}.
+#'   Rows and columns represent subjects in exactly the same order as the
+#'   columns of `y`. The matrix is symmetrized and scaled internally to have
+#'   mean diagonal one. Use [build_kinship_matrix()] to construct it from SNP
+#'   dosages, or provide a precomputed genomic relationship matrix. A dimension
+#'   mismatch stops the fit; a silently permuted subject order produces invalid
+#'   heritability estimates.
+#' @param a_mat Optional numeric pair-level spatial adjacency matrix \eqn{A} of
+#'   dimension \eqn{J \times J}, where \eqn{J = C/2}. Entry `(i, j)` encodes the
+#'   neighborhood weight between paired ROIs `i` and `j`; the diagonal is treated
+#'   as zero and the matrix is spectrally normalized internally. When `NULL`, an
+#'   adjacency matrix is estimated from `y` using [build_a_from_y_halves()] with
+#'   its defaults. Provide `a_mat` when anatomical or simulation adjacency is
+#'   known and should define the residual precision \eqn{D_A - \rho A}. A wrong
+#'   pair order or wrong dimension stops the fit or assigns spatial dependence
+#'   to the wrong ROI pairs.
+#' @param rho_grid Numeric vector of candidate spatial dependence values for
+#'   \eqn{\rho}. The variational posterior for \eqn{\rho} is represented on
+#'   this discrete grid with a uniform prior over values that make
+#'   \eqn{D_A - \rho A} positive definite. The default `seq(0, 0.99, by = 0.01)`
+#'   searches nonnegative spatial dependence below one. Use a denser or narrower
+#'   grid when prior scientific knowledge or computation time warrants it. Empty,
+#'   non-finite, or entirely invalid grids stop the fit; overly coarse grids can
+#'   blur the posterior mean `E_rho`.
+#' @param max_iter Positive integer maximum number of coordinate-ascent VI
+#'   iterations. The default `5000` favors convergence for routine analyses.
+#'   Increase it if the ELBO has not stabilized; decrease it for smoke tests or
+#'   examples. Very small values may return an intentionally under-converged
+#'   posterior.
+#' @param tol Non-negative numeric scalar ELBO tolerance. Iteration stops when
+#'   the absolute change in ELBO is smaller than `tol`; the default `1e-4` is a
+#'   practical convergence threshold. Use `0` to force the algorithm to run
+#'   until `max_iter` in tests or timing experiments. Larger values stop earlier
+#'   but may reduce posterior accuracy.
+#' @param verbose Logical scalar. When `TRUE` (default), the function prints the
+#'   ELBO at each iteration; set to `FALSE` for batch runs, tests, or scripted
+#'   pipelines where per-iteration messages would be noisy.
 #'
 #' @return A list containing posterior summaries, ELBO history, and fitted
 #'   hyperparameters.
@@ -56,7 +93,45 @@ run_vi_hetero_from_mats <- function(
 #' Fits the fast homoscedastic variational inference model for halves-ordered
 #' traits.
 #'
-#' @inheritParams run_vi_hetero_from_mats
+#' @param y Numeric phenotype matrix \eqn{Y} with traits in rows and subjects in
+#'   columns. In manuscript notation this is the \eqn{C \times n} phenotype
+#'   matrix, where \eqn{C = 2J} is even and \eqn{n} is the number of subjects.
+#'   Rows must already be in halves order `(L1, ..., LJ, R1, ..., RJ)`;
+#'   this function does not reorder traits. In the homoscedastic model, all
+#'   trait rows share one genetic variance component, so a wrong trait layout
+#'   affects the common genetic variance estimate as well as the residual
+#'   spatial covariance. The column order must match the subject order in
+#'   `k_mat`.
+#' @param k_mat Numeric kinship matrix \eqn{K} with dimension \eqn{n \times n}.
+#'   Rows and columns represent subjects in exactly the same order as the
+#'   columns of `y`. The matrix is symmetrized and scaled internally to have
+#'   mean diagonal one. Use [build_kinship_matrix()] for SNP-derived kinship or
+#'   provide a precomputed genomic relationship matrix. A dimension mismatch
+#'   stops the fit; a permuted subject order invalidates the genetic random
+#'   effect covariance.
+#' @param a_mat Optional numeric pair-level spatial adjacency matrix \eqn{A}
+#'   with dimension \eqn{J \times J}, where \eqn{J = C/2}. It defines
+#'   neighborhood weights among ROI pairs in the residual precision
+#'   \eqn{D_A - \rho A}; the diagonal is treated as zero and the matrix is
+#'   spectrally normalized internally. When `NULL`, `A` is estimated from `y`
+#'   using [build_a_from_y_halves()]. Provide `a_mat` when an anatomical,
+#'   simulation, or otherwise fixed pair-level adjacency should be used.
+#' @param rho_grid Numeric vector of candidate values for the spatial dependence
+#'   parameter \eqn{\rho}. The variational posterior for \eqn{\rho} is stored as
+#'   weights over this discrete grid after excluding values that make
+#'   \eqn{D_A - \rho A} non-positive-definite. The default
+#'   `seq(0, 0.99, by = 0.01)` searches nonnegative spatial dependence. Use a
+#'   narrower or denser grid for sensitivity analysis or faster focused fits.
+#' @param max_iter Positive integer maximum number of coordinate-ascent VI
+#'   iterations. The default `5000` is intended for routine matrix fits.
+#'   Increase it if ELBO diagnostics still change at the limit; reduce it for
+#'   examples or smoke tests.
+#' @param tol Non-negative numeric ELBO convergence tolerance. Iteration stops
+#'   when the absolute ELBO change is below `tol`; the default is `1e-4`. Use
+#'   `0` to force running to `max_iter`. Larger values stop earlier but may
+#'   return a less stable homoscedastic posterior.
+#' @param verbose Logical scalar. If `TRUE` (default), print per-iteration ELBO
+#'   progress. Set `FALSE` for scripts, tests, or large batches.
 #'
 #' @return A list containing posterior summaries, ELBO history, and fitted
 #'   hyperparameters.
@@ -102,15 +177,39 @@ run_vi_homo_from_mats <- function(
 #' Runs the heteroscedastic VI model for a single simulated dataset and returns
 #' both the fitted variational object and heritability summaries.
 #'
-#' @param y A halves-ordered phenotype matrix.
-#' @param k_mat A subject-by-subject kinship matrix.
-#' @param a_true The adjacency matrix used to simulate the data.
-#' @param rho_grid Candidate rho values.
-#' @param max_iter Maximum number of VI iterations.
-#' @param tol Absolute ELBO tolerance used for convergence.
-#' @param verbose Logical; if `TRUE`, prints ELBO progress.
-#' @param prefix Optional file prefix passed to [save_vi_result()]. Use `NULL` to
-#'   skip writing files.
+#' @param y Numeric simulated phenotype matrix \eqn{Y} with dimension
+#'   \eqn{C \times n}: traits in rows, subjects in columns, and rows in halves
+#'   order `(L1, ..., LJ, R1, ..., RJ)`. This should usually be the
+#'   `simulated_phenotypes.csv` output generated by [simulate_halves_batch()].
+#'   Its subject order must match `k_mat`. If a transposed matrix or pairs-order
+#'   matrix is supplied, the VI model and heritability summary will be fit to
+#'   the wrong trait structure or fail dimension checks.
+#' @param k_mat Numeric kinship matrix \eqn{K} with dimension \eqn{n \times n}
+#'   in the same subject order as the columns of `y`. In simulation workflows it
+#'   is usually computed from the SNP file by [build_kinship_matrix()]. The fit
+#'   stops if `nrow(k_mat) != ncol(y)`.
+#' @param a_true Numeric adjacency matrix \eqn{A} with dimension
+#'   \eqn{J \times J}, where \eqn{J = C/2}. This is the pair-level adjacency used
+#'   to generate the simulated residual covariance, typically read from
+#'   `A_used.csv`. It is passed as the fixed `a_mat` for fitting and for
+#'   [heritability_from_vi()], so its pair order must match the halves ordering
+#'   of `y`.
+#' @param rho_grid Numeric vector of candidate \eqn{\rho} values used for the
+#'   discrete variational posterior. The default `seq(0, 0.99, by = 0.01)` is a
+#'   broad nonnegative search grid. Narrow it around the simulation truth for
+#'   faster experiments, or widen/refine it when assessing sensitivity.
+#' @param max_iter Positive integer maximum number of VI iterations; default
+#'   `5000`. Increase when the ELBO continues changing at the limit; reduce for
+#'   quick simulation smoke tests.
+#' @param tol Non-negative numeric ELBO convergence tolerance; default `1e-4`.
+#'   Use `0` to disable early stopping before `max_iter`. A large tolerance can
+#'   stop before the simulated posterior has stabilized.
+#' @param verbose Logical scalar controlling ELBO messages. Default `TRUE`;
+#'   set `FALSE` when fitting many simulated SNP datasets.
+#' @param prefix Optional character file prefix passed to [save_vi_result()].
+#'   When `NULL` (default), no result files are written. When supplied, files
+#'   such as `"<prefix>_full_result.rds"` are created and existing files with
+#'   those names are overwritten by the underlying write calls.
 #'
 #' @return A list with elements `res` and `h`.
 #' @export
@@ -192,19 +291,48 @@ empty_batch_summary <- function() {
 #' generated phenotype and adjacency files, runs the heteroscedastic VI model,
 #' and writes a summary CSV.
 #'
-#' @param group_dir Path to a simulation group directory.
-#' @param resume_from_snp Integer SNP id used as a resume point.
-#' @param skip_completed Logical; if `TRUE`, reuse existing saved results when
-#'   available.
-#' @param rho_grid Candidate rho values.
-#' @param max_iter Maximum number of VI iterations.
-#' @param tol Absolute ELBO tolerance used for convergence.
-#' @param verbose Logical; if `TRUE`, prints ELBO progress.
-#' @param result_stub File-name stem used for saved result files inside each SNP
-#'   output folder.
-#' @param summary_path Optional CSV path for the summary table. Use `NULL` to skip
-#'   writing the summary to disk.
-#' @param snp_pattern Regular expression used to detect SNP input files.
+#' @param group_dir Character scalar path to one simulation group directory,
+#'   such as a directory containing `SNP1.csv`, `SNP2.csv`, and per-SNP
+#'   subdirectories produced by [simulate_halves_batch()]. For each matched SNP
+#'   file, the function expects `group_dir/SNP*/simulated_phenotypes.csv` with
+#'   \eqn{Y} in \eqn{C \times n} layout and `group_dir/SNP*/A_used.csv` with
+#'   the corresponding \eqn{J \times J} adjacency matrix. The genotype SNP file
+#'   itself is read to rebuild \eqn{K}. Missing required files cause that SNP to
+#'   be skipped.
+#' @param resume_from_snp Positive integer SNP id used as a resume point. The
+#'   default `1L` fits all matched SNP files. Set, for example,
+#'   `resume_from_snp = 100` to skip `SNP1.csv` through `SNP99.csv` after a
+#'   partial batch run.
+#' @param skip_completed Logical scalar. If `TRUE`, an existing
+#'   `"<result_stub>_full_result.rds"` file inside a SNP output directory is read
+#'   instead of refitting that SNP. This is useful for resuming long batches, but
+#'   risky if fitting settings, package version, `rho_grid`, or inputs changed
+#'   since the saved result was created. The default `FALSE` refits from inputs.
+#' @param rho_grid Numeric candidate grid for the spatial dependence parameter
+#'   \eqn{\rho}; passed to [fit_simulation_case_halves()]. The default
+#'   `seq(0, 0.99, by = 0.01)` is broad. Use the same grid across SNPs when
+#'   comparing posterior `E_rho` values.
+#' @param max_iter Positive integer maximum VI iterations per SNP dataset.
+#'   Default `5000`. Reduce for debugging; increase for difficult batches whose
+#'   ELBO traces do not stabilize.
+#' @param tol Non-negative numeric ELBO tolerance per SNP fit. Default `1e-4`;
+#'   set to `0` for fixed-iteration simulation experiments.
+#' @param verbose Logical scalar controlling per-iteration ELBO messages from
+#'   each SNP fit. Default `TRUE`; set `FALSE` for production batch logs.
+#' @param result_stub Character scalar file-name stem for result files written
+#'   inside each per-SNP output folder. The default `"vi_halves_fast"` creates
+#'   files such as `vi_halves_fast_full_result.rds` and
+#'   `vi_halves_fast_rho_posterior.csv`. Changing this lets multiple analyses
+#'   coexist in the same SNP directories.
+#' @param summary_path Optional character path for the batch summary CSV. The
+#'   default writes `"<result_stub>_summary.csv"` inside `group_dir`; `NULL`
+#'   returns the data frame without writing a summary. Existing files are
+#'   overwritten.
+#' @param snp_pattern Character regular expression used to select SNP input
+#'   files in `group_dir`. The default `"^SNP[0-9]+\\.csv$"` expects names such
+#'   as `SNP1.csv`. Change it only when your simulation files use a different
+#'   naming convention; the numeric SNP id must still be recoverable by the
+#'   package's `SNP<integer>.csv` parser.
 #'
 #' @return A data frame summarizing the fitted SNP datasets.
 #' @export

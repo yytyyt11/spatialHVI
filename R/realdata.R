@@ -3,55 +3,146 @@
 #' Reads a brain-measure CSV file, aligns it with genotype or kinship inputs,
 #' fits the heteroscedastic VI model, and optionally saves posterior summaries.
 #'
-#' @param brain_csv Path to a brain-measure CSV file.
-#' @param use_k_from Either `"X"` to construct the kinship matrix from a genotype
-#'   object or `"K"` to use a precomputed kinship matrix.
-#' @param X Optional genotype matrix or data frame used when `use_k_from = "X"`.
-#'   Subjects must be in rows. When a data frame is supplied, non-SNP columns are
-#'   allowed as long as the SNP columns can be identified.
-#' @param K Optional kinship matrix or data frame used when `use_k_from = "K"`.
-#' @param a_mat Optional adjacency matrix. When `NULL`, it is estimated from the
-#'   phenotype matrix.
-#' @param brain_row_names Logical; if `TRUE`, treat the first CSV column as row
-#'   names when reading `brain_csv`.
-#' @param phenotype_layout Layout of `brain_csv`. Use `"traits_in_rows"` for the
-#'   common layout with traits in rows and samples in columns, `"samples_in_rows"`
-#'   for the transpose, or `"auto"` to infer the layout from trait names.
-#' @param phenotype_id_col Optional sample ID column in `brain_csv` when
-#'   `phenotype_layout = "samples_in_rows"`.
-#' @param phenotype_sample_ids Optional sample IDs for `brain_csv` when traits are
-#'   stored in rows and the sample IDs are not present in the file.
-#' @param x_ids Optional sample IDs for `X` when they are not stored in the row
-#'   names or an ID column.
-#' @param k_ids Optional sample IDs for `K` when they are not stored in row and
-#'   column names.
-#' @param x_id_col Optional ID column name inside `X`.
-#' @param x_snp_cols Optional SNP columns to use from `X`, supplied as column names
-#'   or indices after removing `x_id_col`.
-#' @param x_snp_pattern Regular expression used to detect SNP columns when
-#'   `x_snp_cols` is `NULL`.
-#' @param x_annotation Optional SNP annotation data frame used to identify SNP
-#'   columns in `X`.
-#' @param annotation_rsid_col Column of `x_annotation` containing SNP identifiers.
-#' @param trait_order Trait ordering in the phenotype matrix. Use `"halves"` for
-#'   `(L1, ..., LJ, R1, ..., RJ)`, `"pairs"` for `(L1, R1, L2, R2, ...)`, or
-#'   `"auto"` to infer the order from trait names.
-#' @param allow_row_order_alignment Logical; if `TRUE`, fall back to row-order
-#'   alignment when no usable sample IDs are available.
-#' @param na_action How to handle missing phenotype values. `"error"` stops with a
-#'   clear message; `"zero"` replaces them with zero before fitting.
-#' @param zscore_rows Logical; if `TRUE`, z-score each phenotype row after sample
-#'   alignment.
-#' @param k_knn Number of neighbors used when constructing `a_mat` from the
-#'   phenotype matrix.
-#' @param rho_grid Candidate rho values.
-#' @param max_iter Maximum number of VI iterations.
-#' @param tol Absolute ELBO tolerance used for convergence.
-#' @param verbose Logical; if `TRUE`, prints ELBO progress.
-#' @param prefix Optional output prefix passed to [save_vi_result()]. Use `NULL`
-#'   to skip writing files.
-#' @param make_plot Logical; if `TRUE`, plot the ELBO trace.
-#' @param show_summary Logical; if `TRUE`, print a concise text summary.
+#' @param brain_csv Character scalar path to the brain-measure phenotype CSV.
+#'   The file must contain the observed phenotype matrix \eqn{Y}. With
+#'   `phenotype_layout = "traits_in_rows"`, rows are traits and columns are
+#'   subjects; with `"samples_in_rows"`, rows are subjects and columns are
+#'   traits before the function transposes to the required \eqn{C \times n}
+#'   layout. Trait names should allow left/right pairing when `trait_order =
+#'   "auto"`. Non-numeric phenotype columns, wrong orientation, or hidden ID
+#'   columns treated as traits will cause errors or invalid model axes.
+#' @param use_k_from Character scalar choosing the source of the kinship matrix
+#'   \eqn{K}. `"X"` constructs \eqn{K} from genotype dosages `X` using
+#'   [build_kinship_matrix()]. `"K"` uses the precomputed kinship object `K`.
+#'   Choose `"X"` when SNP dosages are available and choose `"K"` when a trusted
+#'   genomic relationship matrix has already been computed. The selected source
+#'   must have the same subjects as `brain_csv`.
+#' @param X Optional numeric matrix or data frame used when `use_k_from = "X"`.
+#'   Subjects must be in rows and SNP markers in columns. A data frame may also
+#'   contain one sample ID column and non-SNP columns, but SNP columns must be
+#'   identifiable by `x_snp_cols`, `x_annotation`, `x_snp_pattern`, or numeric
+#'   fallback. Do not let columns such as `PTID` enter the SNP set; that would
+#'   either fail numeric validation or distort \eqn{K}.
+#' @param K Optional numeric matrix or data frame used when `use_k_from = "K"`.
+#'   It must represent a square subject-by-subject kinship matrix \eqn{K} with
+#'   rows and columns in the same sample order. Sample IDs may be supplied by
+#'   row names, matching row/column names, an ID column detected from a data
+#'   frame, or `k_ids`. A non-square matrix or mismatched dimension stops the
+#'   workflow; a wrong order without IDs can silently invalidate estimates if
+#'   row-order alignment is allowed.
+#' @param a_mat Optional numeric pair-level adjacency matrix \eqn{A} with
+#'   dimension \eqn{J \times J}, where \eqn{J = C/2}. It encodes spatial
+#'   neighborhood weights among left/right ROI pairs for the residual precision
+#'   \eqn{D_A - \rho A}. When `NULL` (default), it is estimated from the aligned
+#'   phenotype matrix using [build_a_from_y_halves()] and `k_knn`. Provide an
+#'   anatomical or externally estimated adjacency when available.
+#' @param brain_row_names Logical scalar. If `TRUE` (default), the first column
+#'   of `brain_csv` is read as row names. This is appropriate for CSV files where
+#'   the first column stores trait names under `traits_in_rows` or sample IDs
+#'   under `samples_in_rows`. Set `FALSE` when the CSV has no row-name column;
+#'   otherwise the first data column may be removed accidentally.
+#' @param phenotype_layout Character scalar describing the orientation of
+#'   `brain_csv`. `"auto"` (default) tries to infer orientation from left/right
+#'   trait names in rows or columns and otherwise falls back to row names when
+#'   present. `"traits_in_rows"` means the file already stores \eqn{Y} as traits
+#'   by subjects. `"samples_in_rows"` means the file stores subjects by traits
+#'   and will be transposed. Set this manually when auto-detection could confuse
+#'   subject IDs with trait names.
+#' @param phenotype_id_col Optional character scalar naming the sample ID column
+#'   in `brain_csv` when `phenotype_layout = "samples_in_rows"`. That column is
+#'   removed before numeric phenotype conversion and used to align samples with
+#'   `X` or `K`. If omitted, row names are used when informative. Supplying a
+#'   wrong column name stops; omitting IDs may force risky row-order alignment.
+#' @param phenotype_sample_ids Optional character vector of sample IDs for
+#'   `brain_csv` when phenotypes are stored as traits in rows and the file
+#'   columns do not contain usable sample IDs. Its length must equal `ncol(Y)`.
+#'   Use it to align phenotype columns with genotype rows or kinship rows when
+#'   CSV column names are generic. Incorrect IDs stop alignment or subset to the
+#'   wrong common samples.
+#' @param x_ids Optional character vector of sample IDs for `X` when they are
+#'   not available from row names or `x_id_col`. Length must equal `nrow(X)`.
+#'   Use this to make genotype-to-phenotype alignment explicit and avoid
+#'   row-order fallback.
+#' @param k_ids Optional character vector of sample IDs for `K` when they are
+#'   not available from row/column names or an ID column. Length should equal
+#'   `nrow(K)`. Use this for precomputed kinship matrices stored without names.
+#' @param x_id_col Optional character scalar naming the sample ID column inside
+#'   `X`, for example `"PTID"`. The column is removed before SNP selection and
+#'   used only for sample alignment. If `NULL`, the function tries to detect a
+#'   unique non-numeric ID column. Passing the wrong column or leaving an ID
+#'   column inside the SNP set can cause SNP selection errors or invalid
+#'   kinship estimates.
+#' @param x_snp_cols Optional SNP column selection for `X`, supplied as column
+#'   names or column indices after removing `x_id_col`. Use this when SNP
+#'   columns do not follow `x_snp_pattern` or when the data frame also contains
+#'   numeric phenotype/covariate columns. A wrong selection changes \eqn{K};
+#'   unknown names or non-numeric selected columns stop.
+#' @param x_snp_pattern Character regular expression used to detect SNP columns
+#'   when `x_snp_cols` is `NULL` and annotation matching is unavailable. The
+#'   default `"^rs"` targets common rsID-style marker names. Change it for other
+#'   marker naming conventions. If it misses all SNPs, the function falls back
+#'   to all numeric columns, which can be unsafe when numeric covariates or brain
+#'   traits are present.
+#' @param x_annotation Optional data frame containing SNP annotation used to
+#'   identify SNP columns in `X`. When `annotation_rsid_col` is present, columns
+#'   of `X` whose names match annotation rsIDs are selected before applying
+#'   `x_snp_pattern`. Use this to avoid treating non-SNP numeric columns as
+#'   markers.
+#' @param annotation_rsid_col Character scalar naming the SNP identifier column
+#'   in `x_annotation`; default `"RSID"`. The values should match column names in
+#'   `X`. A wrong name disables annotation-based SNP selection and may trigger
+#'   pattern or numeric fallback.
+#' @param trait_order Character scalar describing the row order of paired traits
+#'   after `brain_csv` is oriented as \eqn{Y}. `"auto"` (default) detects
+#'   left/right prefixes and reorders alternating pairs if needed. `"halves"`
+#'   means rows are `(L1, ..., LJ, R1, ..., RJ)`. `"pairs"` means rows are
+#'   `(L1, R1, L2, R2, ...)` and will be reordered to halves order before
+#'   fitting. Supplying the wrong value pairs left/right regions incorrectly and
+#'   changes both \eqn{A} and heritability summaries.
+#' @param allow_row_order_alignment Logical scalar controlling a safety fallback
+#'   when no usable sample IDs are available. If `TRUE` (default), the function
+#'   may align phenotype columns to rows of `X` or rows/columns of `K` by their
+#'   existing order, with a warning. Set `FALSE` for safer real analyses unless
+#'   you have verified row order externally. Allowing row-order alignment with
+#'   misordered data silently invalidates \eqn{K}-to-\eqn{Y} correspondence.
+#' @param na_action Character scalar controlling missing phenotype values.
+#'   `"error"` (default) stops if `brain_csv` contains `NA`, which is safest for
+#'   model fitting. `"zero"` replaces missing values with zero before optional
+#'   row-wise z-scoring; use it only when zero-imputation is scientifically
+#'   justified, because it can alter trait covariance and adjacency estimates.
+#' @param zscore_rows Logical scalar. If `TRUE` (default), each phenotype row is
+#'   centered and scaled across aligned subjects before fitting, matching the
+#'   standardized phenotype convention in the manuscript. Set `FALSE` only when
+#'   the input \eqn{Y} has already been standardized or when raw-scale modeling
+#'   is intentionally required.
+#' @param k_knn Positive integer number of neighbors used when `a_mat = NULL`
+#'   and \eqn{A} is estimated from the phenotype matrix. The default `2`
+#'   produces a sparse pair-level graph. Increase for denser phenotype-derived
+#'   spatial structure; decrease for very local structure.
+#' @param rho_grid Numeric vector of candidate \eqn{\rho} values for the
+#'   discrete variational posterior. The default `seq(0, 0.99, by = 0.01)`
+#'   searches nonnegative spatial dependence. Use a narrower or denser grid for
+#'   sensitivity analysis or when anatomical prior knowledge suggests a range.
+#' @param max_iter Positive integer maximum number of VI iterations for the
+#'   real-data fit. The default `10000` allows more iterations than examples or
+#'   simulations. Reduce for smoke tests; increase if convergence diagnostics
+#'   show the ELBO still changing at the limit.
+#' @param tol Non-negative numeric ELBO convergence tolerance. The default
+#'   `1e-4` stops when the ELBO stabilizes; use `0` to force running to
+#'   `max_iter`. Larger values trade accuracy for speed.
+#' @param verbose Logical scalar. If `TRUE` (default), print per-iteration ELBO
+#'   progress from the VI optimizer. Set `FALSE` for batch or reproducible logs.
+#' @param prefix Optional character output prefix passed to [save_vi_result()].
+#'   `NULL` (default) skips writing files. If supplied, posterior summaries and
+#'   the full result are written using this prefix, and existing files with the
+#'   same names are overwritten.
+#' @param make_plot Logical scalar. If `TRUE`, plot the ELBO trace after fitting
+#'   using base graphics. Default `FALSE` avoids interactive graphics in batch
+#'   workflows.
+#' @param show_summary Logical scalar. If `TRUE`, print a concise text summary
+#'   containing posterior `E[rho]`, broad-sense \eqn{H^2}, and narrow-sense
+#'   \eqn{h_c^2} summaries. Default `FALSE` keeps the function quiet except for
+#'   requested verbose optimizer output.
 #'
 #' @return A list containing the aligned phenotype matrix, kinship matrix,
 #'   adjacency matrix, fitted VI result, heritability summary, sample IDs, trait
@@ -235,53 +326,47 @@ run_realdata_brain_hetero_halves <- function(
 #' kinship object, optionally subsets it, and then calls
 #' [run_realdata_brain_hetero_halves()].
 #'
-#' @param brain_csv Path to a brain-measure CSV file.
-#' @param rdata_path Path to an `.RData` file containing genotype, kinship, or
-#'   annotation objects.
-#' @param use_k_from Whether to use a genotype object (`"X"`), a kinship object
-#'   (`"K"`), or `"auto"` detection.
-#' @param x_object Optional object name in `rdata_path` to use as the genotype
-#'   input.
-#' @param k_object Optional object name in `rdata_path` to use as the kinship
-#'   input.
-#' @param genotype_object Backward-compatible alias for `x_object`.
-#' @param annotation_object Optional object name in `rdata_path` containing SNP
-#'   annotations such as an `RSID` column.
-#' @param genotype_rows Optional row indices used to subset the selected genotype
-#'   or kinship object.
-#' @param genotype_cols Optional SNP column indices or names used to subset the
-#'   selected genotype object after ID columns are removed.
-#' @param brain_row_names Logical; if `TRUE`, treat the first CSV column as row
-#'   names.
-#' @param phenotype_layout Layout of `brain_csv`. See
-#'   [run_realdata_brain_hetero_halves()].
-#' @param phenotype_id_col Optional sample ID column in `brain_csv` when samples
-#'   are stored in rows.
-#' @param phenotype_sample_ids Optional sample IDs for `brain_csv` when traits are
-#'   stored in rows.
-#' @param x_id_col Optional ID column name inside `x_object`.
-#' @param x_snp_cols Optional SNP columns to use from `x_object`.
-#' @param x_snp_pattern Regular expression used to detect SNP columns when
-#'   `x_snp_cols` is `NULL`.
-#' @param annotation_rsid_col Column of `annotation_object` containing SNP
-#'   identifiers.
-#' @param trait_order Trait ordering in the phenotype matrix.
-#' @param allow_row_order_alignment Logical; if `TRUE`, fall back to row-order
-#'   alignment when no usable sample IDs are available.
-#' @param na_action How to handle missing phenotype values.
-#' @param zscore_rows Logical; if `TRUE`, z-score each phenotype row after
-#'   alignment.
-#' @param a_mat Optional adjacency matrix. When `NULL`, it is estimated from the
-#'   phenotype matrix.
-#' @param k_knn Number of neighbors used when constructing `a_mat`.
-#' @param rho_grid Candidate rho values.
-#' @param max_iter Maximum number of VI iterations.
-#' @param tol Absolute ELBO tolerance used for convergence.
-#' @param verbose Logical; if `TRUE`, prints ELBO progress.
-#' @param prefix Optional output prefix passed to [save_vi_result()]. Use `NULL`
-#'   to skip writing files.
-#' @param make_plot Logical; if `TRUE`, plot the ELBO trace.
-#' @param show_summary Logical; if `TRUE`, print a concise text summary.
+#' @inheritParams run_realdata_brain_hetero_halves
+#' @param rdata_path Character scalar path to an `.RData` file containing one or
+#'   more objects used by the real-data workflow. Depending on `use_k_from`, the
+#'   file should contain either a genotype matrix/data frame \eqn{X}, a
+#'   precomputed kinship matrix \eqn{K}, and optionally a SNP annotation data
+#'   frame. Objects are loaded into an isolated environment; a missing file or
+#'   missing requested object stops the workflow.
+#' @param use_k_from Character scalar choosing how to obtain \eqn{K} from the
+#'   `.RData` file. `"X"` uses `x_object` and constructs \eqn{K} from genotype
+#'   dosages. `"K"` uses `k_object` as a precomputed kinship matrix. `"auto"`
+#'   (default) first tries to detect a kinship-like object and otherwise falls
+#'   back to a genotype-like object. Manual `"X"` or `"K"` is safer when the file
+#'   contains multiple matrix-like objects.
+#' @param x_object Optional character scalar object name in `rdata_path` to use
+#'   as genotype input \eqn{X}. The object must be a numeric matrix or data frame
+#'   with subjects in rows and SNP columns identifiable after removing any ID
+#'   column. If `NULL`, the function attempts to detect a genotype-like object.
+#'   Specify this manually when multiple genotype/covariate tables are present.
+#' @param k_object Optional character scalar object name in `rdata_path` to use
+#'   as a precomputed kinship matrix \eqn{K}. The object must be square numeric
+#'   matrix-like data with subject order alignable to `brain_csv`. If `NULL`, the
+#'   function attempts to detect a symmetric square numeric object.
+#' @param genotype_object Optional backward-compatible alias for `x_object`. Use
+#'   `x_object` in new code. If both are supplied, `x_object` takes precedence.
+#'   A wrong object name stops with an object-not-found or no-genotype error.
+#' @param annotation_object Optional character scalar object name in `rdata_path`
+#'   containing SNP annotations, commonly a data frame with an `RSID` column.
+#'   When supplied or auto-detected, it helps select SNP columns in `x_object`
+#'   before pattern or numeric fallback. If the annotation object is named
+#'   incorrectly, SNP selection may fall back to less safe rules.
+#' @param genotype_rows Optional row indices used to subset the selected
+#'   genotype object \eqn{X} or kinship object \eqn{K} before sample alignment.
+#'   For `use_k_from = "X"`, rows subset subjects in the genotype table. For
+#'   `"K"`, the same indices subset both rows and columns of the kinship matrix.
+#'   Use only when the subset is known to match the phenotype subjects; an
+#'   incorrect subset breaks \eqn{Y}/\eqn{K} alignment.
+#' @param genotype_cols Optional backward-compatible SNP column selection passed
+#'   to `x_snp_cols` when `x_snp_cols` is `NULL`. Values may be names or indices
+#'   after removing `x_id_col`. Use `x_snp_cols` in new code. A wrong selection
+#'   changes the constructed kinship matrix or stops if selected columns are not
+#'   numeric.
 #'
 #' @return A list containing the aligned phenotype matrix, kinship matrix,
 #'   adjacency matrix, fitted VI result, heritability summary, sample IDs, trait

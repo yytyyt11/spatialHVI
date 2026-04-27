@@ -7,13 +7,28 @@
 make_a_knn(j_pairs, k = 2, sigma = 1, seed = NULL)
 }
 \arguments{
-\item{j_pairs}{Number of paired regions of interest.}
+\item{j_pairs}{Positive integer number of paired regions of interest
+\eqn{J = C/2}. The returned adjacency matrix has one row and column per
+left/right ROI pair, not one row per individual left or right trait. This
+must match the pair dimension used by halves-ordered phenotype matrices
+with \eqn{C = 2J} rows.}
 
-\item{k}{Number of nearest neighbors retained for each region.}
+\item{k}{Positive integer number of nearest neighbors retained for each ROI
+pair when constructing the pair-level adjacency \eqn{A}. The default \code{2}
+creates a sparse local graph. Increase \code{k} for denser spatial dependence or
+decrease it for very local dependence; values larger than \code{j_pairs - 1} are
+effectively capped by the available neighbors.}
 
-\item{sigma}{Bandwidth used when converting distances to edge weights.}
+\item{sigma}{Positive numeric bandwidth for converting squared distances
+between simulated two-dimensional coordinates into edge weights through a
+Gaussian kernel. The default \code{1} gives moderate decay. Smaller values make
+non-nearest edges weaker; larger values make retained edges more similar.
+Non-positive or non-finite values can produce invalid adjacency weights.}
 
-\item{seed}{Optional integer seed.}
+\item{seed}{Optional integer random seed used only for generating the
+temporary two-dimensional coordinates. The default \code{NULL} leaves the
+current RNG state unchanged. Set a seed when a simulation group must use a
+reproducible adjacency matrix.}
 }
 \value{
 A symmetric \code{j_pairs} by \code{j_pairs} adjacency matrix.

@@ -36,82 +36,172 @@ run_realdata_brain_hetero_halves(
 )
 }
 \arguments{
-\item{brain_csv}{Path to a brain-measure CSV file.}
+\item{brain_csv}{Character scalar path to the brain-measure phenotype CSV.
+The file must contain the observed phenotype matrix \eqn{Y}. With
+\code{phenotype_layout = "traits_in_rows"}, rows are traits and columns are
+subjects; with \code{"samples_in_rows"}, rows are subjects and columns are
+traits before the function transposes to the required \eqn{C \times n}
+layout. Trait names should allow left/right pairing when \code{trait_order = "auto"}. Non-numeric phenotype columns, wrong orientation, or hidden ID
+columns treated as traits will cause errors or invalid model axes.}
 
-\item{use_k_from}{Either \code{"X"} to construct the kinship matrix from a genotype
-object or \code{"K"} to use a precomputed kinship matrix.}
+\item{use_k_from}{Character scalar choosing the source of the kinship matrix
+\eqn{K}. \code{"X"} constructs \eqn{K} from genotype dosages \code{X} using
+\code{\link[=build_kinship_matrix]{build_kinship_matrix()}}. \code{"K"} uses the precomputed kinship object \code{K}.
+Choose \code{"X"} when SNP dosages are available and choose \code{"K"} when a trusted
+genomic relationship matrix has already been computed. The selected source
+must have the same subjects as \code{brain_csv}.}
 
-\item{X}{Optional genotype matrix or data frame used when \code{use_k_from = "X"}.
-Subjects must be in rows. When a data frame is supplied, non-SNP columns are
-allowed as long as the SNP columns can be identified.}
+\item{X}{Optional numeric matrix or data frame used when \code{use_k_from = "X"}.
+Subjects must be in rows and SNP markers in columns. A data frame may also
+contain one sample ID column and non-SNP columns, but SNP columns must be
+identifiable by \code{x_snp_cols}, \code{x_annotation}, \code{x_snp_pattern}, or numeric
+fallback. Do not let columns such as \code{PTID} enter the SNP set; that would
+either fail numeric validation or distort \eqn{K}.}
 
-\item{K}{Optional kinship matrix or data frame used when \code{use_k_from = "K"}.}
+\item{K}{Optional numeric matrix or data frame used when \code{use_k_from = "K"}.
+It must represent a square subject-by-subject kinship matrix \eqn{K} with
+rows and columns in the same sample order. Sample IDs may be supplied by
+row names, matching row/column names, an ID column detected from a data
+frame, or \code{k_ids}. A non-square matrix or mismatched dimension stops the
+workflow; a wrong order without IDs can silently invalidate estimates if
+row-order alignment is allowed.}
 
-\item{a_mat}{Optional adjacency matrix. When \code{NULL}, it is estimated from the
-phenotype matrix.}
+\item{a_mat}{Optional numeric pair-level adjacency matrix \eqn{A} with
+dimension \eqn{J \times J}, where \eqn{J = C/2}. It encodes spatial
+neighborhood weights among left/right ROI pairs for the residual precision
+\eqn{D_A - \rho A}. When \code{NULL} (default), it is estimated from the aligned
+phenotype matrix using \code{\link[=build_a_from_y_halves]{build_a_from_y_halves()}} and \code{k_knn}. Provide an
+anatomical or externally estimated adjacency when available.}
 
-\item{brain_row_names}{Logical; if \code{TRUE}, treat the first CSV column as row
-names when reading \code{brain_csv}.}
+\item{brain_row_names}{Logical scalar. If \code{TRUE} (default), the first column
+of \code{brain_csv} is read as row names. This is appropriate for CSV files where
+the first column stores trait names under \code{traits_in_rows} or sample IDs
+under \code{samples_in_rows}. Set \code{FALSE} when the CSV has no row-name column;
+otherwise the first data column may be removed accidentally.}
 
-\item{phenotype_layout}{Layout of \code{brain_csv}. Use \code{"traits_in_rows"} for the
-common layout with traits in rows and samples in columns, \code{"samples_in_rows"}
-for the transpose, or \code{"auto"} to infer the layout from trait names.}
+\item{phenotype_layout}{Character scalar describing the orientation of
+\code{brain_csv}. \code{"auto"} (default) tries to infer orientation from left/right
+trait names in rows or columns and otherwise falls back to row names when
+present. \code{"traits_in_rows"} means the file already stores \eqn{Y} as traits
+by subjects. \code{"samples_in_rows"} means the file stores subjects by traits
+and will be transposed. Set this manually when auto-detection could confuse
+subject IDs with trait names.}
 
-\item{phenotype_id_col}{Optional sample ID column in \code{brain_csv} when
-\code{phenotype_layout = "samples_in_rows"}.}
+\item{phenotype_id_col}{Optional character scalar naming the sample ID column
+in \code{brain_csv} when \code{phenotype_layout = "samples_in_rows"}. That column is
+removed before numeric phenotype conversion and used to align samples with
+\code{X} or \code{K}. If omitted, row names are used when informative. Supplying a
+wrong column name stops; omitting IDs may force risky row-order alignment.}
 
-\item{phenotype_sample_ids}{Optional sample IDs for \code{brain_csv} when traits are
-stored in rows and the sample IDs are not present in the file.}
+\item{phenotype_sample_ids}{Optional character vector of sample IDs for
+\code{brain_csv} when phenotypes are stored as traits in rows and the file
+columns do not contain usable sample IDs. Its length must equal \code{ncol(Y)}.
+Use it to align phenotype columns with genotype rows or kinship rows when
+CSV column names are generic. Incorrect IDs stop alignment or subset to the
+wrong common samples.}
 
-\item{x_ids}{Optional sample IDs for \code{X} when they are not stored in the row
-names or an ID column.}
+\item{x_ids}{Optional character vector of sample IDs for \code{X} when they are
+not available from row names or \code{x_id_col}. Length must equal \code{nrow(X)}.
+Use this to make genotype-to-phenotype alignment explicit and avoid
+row-order fallback.}
 
-\item{k_ids}{Optional sample IDs for \code{K} when they are not stored in row and
-column names.}
+\item{k_ids}{Optional character vector of sample IDs for \code{K} when they are
+not available from row/column names or an ID column. Length should equal
+\code{nrow(K)}. Use this for precomputed kinship matrices stored without names.}
 
-\item{x_id_col}{Optional ID column name inside \code{X}.}
+\item{x_id_col}{Optional character scalar naming the sample ID column inside
+\code{X}, for example \code{"PTID"}. The column is removed before SNP selection and
+used only for sample alignment. If \code{NULL}, the function tries to detect a
+unique non-numeric ID column. Passing the wrong column or leaving an ID
+column inside the SNP set can cause SNP selection errors or invalid
+kinship estimates.}
 
-\item{x_snp_cols}{Optional SNP columns to use from \code{X}, supplied as column names
-or indices after removing \code{x_id_col}.}
+\item{x_snp_cols}{Optional SNP column selection for \code{X}, supplied as column
+names or column indices after removing \code{x_id_col}. Use this when SNP
+columns do not follow \code{x_snp_pattern} or when the data frame also contains
+numeric phenotype/covariate columns. A wrong selection changes \eqn{K};
+unknown names or non-numeric selected columns stop.}
 
-\item{x_snp_pattern}{Regular expression used to detect SNP columns when
-\code{x_snp_cols} is \code{NULL}.}
+\item{x_snp_pattern}{Character regular expression used to detect SNP columns
+when \code{x_snp_cols} is \code{NULL} and annotation matching is unavailable. The
+default \code{"^rs"} targets common rsID-style marker names. Change it for other
+marker naming conventions. If it misses all SNPs, the function falls back
+to all numeric columns, which can be unsafe when numeric covariates or brain
+traits are present.}
 
-\item{x_annotation}{Optional SNP annotation data frame used to identify SNP
-columns in \code{X}.}
+\item{x_annotation}{Optional data frame containing SNP annotation used to
+identify SNP columns in \code{X}. When \code{annotation_rsid_col} is present, columns
+of \code{X} whose names match annotation rsIDs are selected before applying
+\code{x_snp_pattern}. Use this to avoid treating non-SNP numeric columns as
+markers.}
 
-\item{annotation_rsid_col}{Column of \code{x_annotation} containing SNP identifiers.}
+\item{annotation_rsid_col}{Character scalar naming the SNP identifier column
+in \code{x_annotation}; default \code{"RSID"}. The values should match column names in
+\code{X}. A wrong name disables annotation-based SNP selection and may trigger
+pattern or numeric fallback.}
 
-\item{trait_order}{Trait ordering in the phenotype matrix. Use \code{"halves"} for
-\verb{(L1, ..., LJ, R1, ..., RJ)}, \code{"pairs"} for \verb{(L1, R1, L2, R2, ...)}, or
-\code{"auto"} to infer the order from trait names.}
+\item{trait_order}{Character scalar describing the row order of paired traits
+after \code{brain_csv} is oriented as \eqn{Y}. \code{"auto"} (default) detects
+left/right prefixes and reorders alternating pairs if needed. \code{"halves"}
+means rows are \verb{(L1, ..., LJ, R1, ..., RJ)}. \code{"pairs"} means rows are
+\verb{(L1, R1, L2, R2, ...)} and will be reordered to halves order before
+fitting. Supplying the wrong value pairs left/right regions incorrectly and
+changes both \eqn{A} and heritability summaries.}
 
-\item{allow_row_order_alignment}{Logical; if \code{TRUE}, fall back to row-order
-alignment when no usable sample IDs are available.}
+\item{allow_row_order_alignment}{Logical scalar controlling a safety fallback
+when no usable sample IDs are available. If \code{TRUE} (default), the function
+may align phenotype columns to rows of \code{X} or rows/columns of \code{K} by their
+existing order, with a warning. Set \code{FALSE} for safer real analyses unless
+you have verified row order externally. Allowing row-order alignment with
+misordered data silently invalidates \eqn{K}-to-\eqn{Y} correspondence.}
 
-\item{na_action}{How to handle missing phenotype values. \code{"error"} stops with a
-clear message; \code{"zero"} replaces them with zero before fitting.}
+\item{na_action}{Character scalar controlling missing phenotype values.
+\code{"error"} (default) stops if \code{brain_csv} contains \code{NA}, which is safest for
+model fitting. \code{"zero"} replaces missing values with zero before optional
+row-wise z-scoring; use it only when zero-imputation is scientifically
+justified, because it can alter trait covariance and adjacency estimates.}
 
-\item{zscore_rows}{Logical; if \code{TRUE}, z-score each phenotype row after sample
-alignment.}
+\item{zscore_rows}{Logical scalar. If \code{TRUE} (default), each phenotype row is
+centered and scaled across aligned subjects before fitting, matching the
+standardized phenotype convention in the manuscript. Set \code{FALSE} only when
+the input \eqn{Y} has already been standardized or when raw-scale modeling
+is intentionally required.}
 
-\item{k_knn}{Number of neighbors used when constructing \code{a_mat} from the
-phenotype matrix.}
+\item{k_knn}{Positive integer number of neighbors used when \code{a_mat = NULL}
+and \eqn{A} is estimated from the phenotype matrix. The default \code{2}
+produces a sparse pair-level graph. Increase for denser phenotype-derived
+spatial structure; decrease for very local structure.}
 
-\item{rho_grid}{Candidate rho values.}
+\item{rho_grid}{Numeric vector of candidate \eqn{\rho} values for the
+discrete variational posterior. The default \code{seq(0, 0.99, by = 0.01)}
+searches nonnegative spatial dependence. Use a narrower or denser grid for
+sensitivity analysis or when anatomical prior knowledge suggests a range.}
 
-\item{max_iter}{Maximum number of VI iterations.}
+\item{max_iter}{Positive integer maximum number of VI iterations for the
+real-data fit. The default \code{10000} allows more iterations than examples or
+simulations. Reduce for smoke tests; increase if convergence diagnostics
+show the ELBO still changing at the limit.}
 
-\item{tol}{Absolute ELBO tolerance used for convergence.}
+\item{tol}{Non-negative numeric ELBO convergence tolerance. The default
+\code{1e-4} stops when the ELBO stabilizes; use \code{0} to force running to
+\code{max_iter}. Larger values trade accuracy for speed.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints ELBO progress.}
+\item{verbose}{Logical scalar. If \code{TRUE} (default), print per-iteration ELBO
+progress from the VI optimizer. Set \code{FALSE} for batch or reproducible logs.}
 
-\item{prefix}{Optional output prefix passed to \code{\link[=save_vi_result]{save_vi_result()}}. Use \code{NULL}
-to skip writing files.}
+\item{prefix}{Optional character output prefix passed to \code{\link[=save_vi_result]{save_vi_result()}}.
+\code{NULL} (default) skips writing files. If supplied, posterior summaries and
+the full result are written using this prefix, and existing files with the
+same names are overwritten.}
 
-\item{make_plot}{Logical; if \code{TRUE}, plot the ELBO trace.}
+\item{make_plot}{Logical scalar. If \code{TRUE}, plot the ELBO trace after fitting
+using base graphics. Default \code{FALSE} avoids interactive graphics in batch
+workflows.}
 
-\item{show_summary}{Logical; if \code{TRUE}, print a concise text summary.}
+\item{show_summary}{Logical scalar. If \code{TRUE}, print a concise text summary
+containing posterior \code{E[rho]}, broad-sense \eqn{H^2}, and narrow-sense
+\eqn{h_c^2} summaries. Default \code{FALSE} keeps the function quiet except for
+requested verbose optimizer output.}
 }
 \value{
 A list containing the aligned phenotype matrix, kinship matrix,
