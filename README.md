@@ -85,8 +85,7 @@ Please cite the manuscript associated with `spatialHVI` as:
 Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang
 (2026). *Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling
 Framework for Disentangling Genetic Contributions to Spatially
-Correlated Complex Traits*. Preprint / Manuscript. Correspondence:
-<yutomakabaka@gmail.com>.
+Correlated Complex Traits*. Preprint / Manuscript. 
 
 ## Contact
 
