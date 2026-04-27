@@ -90,4 +90,4 @@ Correlated Complex Traits*. Preprint / Manuscript. Correspondence:
 
 ## Contact
 
-Yutong Yang <yutomakabaka@gmail.com> Shijia Wang <wangshj1@shanghaitech.edu.cn>
+Yutong Yang <yutomakabaka@gmail.com>, Shijia Wang <wangshj1@shanghaitech.edu.cn>
