@@ -4,7 +4,7 @@ citHeader("To cite spatialHVI, please cite the associated manuscript and, when r
 
 citEntry(
   entry = "Unpublished",
-  title = "Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling Framework for Disentangling Genetic Contributions to Spatially Correlated Complex Traits",
+  title = "A Bayesian spatial mixed model for heritability analysis of correlated neuroimaging phenotypes",
   author = personList(
     person("Yutong", "Yang"),
     person("Fulong", "Zhang"),
@@ -13,11 +13,11 @@ citEntry(
     person("Shijia", "Wang")
   ),
   year = "2026",
-  note = "Preprint / Manuscript",
+  note = "Manuscript",
   textVersion = paste(
     "Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang (2026).",
-    "Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling Framework for Disentangling Genetic Contributions to Spatially Correlated Complex Traits.",
-    "Preprint / Manuscript.",
+    "A Bayesian spatial mixed model for heritability analysis of correlated neuroimaging phenotypes.",
+    "Manuscript.",
     "Correspondence: yutomakabaka@gmail.com."
   )
 )

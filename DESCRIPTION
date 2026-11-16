@@ -1,6 +1,6 @@
 Package: spatialHVI
 Title: Spatial Heritability Variational Inference for Imaging Genetics
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R:
     person(given = "yytyyt11",
            family = "Maintainer",
@@ -9,7 +9,10 @@ Authors@R:
 Description: Provides utilities for simulation, fast variational
     inference fitting, and heritability summaries under a Bayesian spatial
     heritability model for halves-ordered left and right trait pairs in
-    imaging genetics and related multivariate settings.
+    imaging genetics and related multivariate settings. Includes the manuscript
+    mean-field variational implementation, discrete-grid linear-response
+    covariance correction, joint variational intervals, and simulation-calibrated
+    heritability intervals for individual traits and bilateral means.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

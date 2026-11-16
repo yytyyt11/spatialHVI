@@ -1,0 +1,30 @@
+spatialHVI 0.1.0 validation, 17 November 2026
+
+Environment: R 4.4.1 on Windows, single-thread BLAS/OpenMP.
+
+Package tests: 73 passed, 0 failures, 0 warnings, 0 skips.
+Source-package installation and installed synthetic example: passed.
+R CMD check --no-manual --ignore-vignettes: Status OK.
+The PDF reference manual and vignette rebuilding were not part of that check.
+
+Frozen implementation comparison used two small synthetic data sets with
+generating rho = 0.20 and 0.97, six traits and forty subjects. At both the
+manuscript ELBO tolerance (1e-4) and a tighter numerical tolerance (1e-7),
+all checked original MFVI state fields were identical. At the tighter
+tolerance, LRVB covariance matrices and interval endpoints were also identical.
+The maximum scaled Jacobian errors were 3.99e-11 and 3.28e-8; maximum
+perturbation-refit errors were 1.78e-7 and 1.26e-7, below the 5e-4 threshold.
+
+The numerical response checks retain the final increment-based perturbation
+validator. This solves nonlinear perturbed fixed-point equations and avoids
+loss of tiny categorical responses through subtraction of common constants.
+It does not replace or modify the LRVB covariance formula.
+
+The PCH correction was checked against generalized eigenvalues and consistent
+pair permutations. Joint variational quantiles and bilateral covariance were
+checked independently. The four S17 calibration coefficients match the
+manuscript at their full reported precision.
+
+These are software and numerical-equivalence checks using synthetic inputs.
+No new manuscript experiment or ADNI data analysis was run for this release.
+No subject-level ADNI data, GRM, fitted objects or posterior draws are included.

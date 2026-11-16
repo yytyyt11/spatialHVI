@@ -26,7 +26,7 @@ format_heritability_summary <- function(res, h) {
     paste(
       "[Summary]",
       "  E[rho] = %.4f",
-      "  Broad H^2 = %.4f",
+      "  PCH H^2 = %.4f",
       "  mean(narrow h^2) = %.4f (sd = %.4f)",
       sep = "\n"
     ),
@@ -152,11 +152,14 @@ reconstruct_full_sig_list <- function(res) {
 
 #' Estimate Heritability from a VI Fit
 #'
-#' Computes broad-sense and trait-specific narrow-sense heritability from a fitted
-#' halves-ordered VI model.
+#' Computes trait-specific marker heritability and the principal-component
+#' heritability (PCH) summary from a fitted halves-ordered VI model. Fits from
+#' [fit_spatial_hvi()] use the manuscript mean-inverse residual convention;
+#' legacy fits keep their inverse-mean convention. The PCH whitening uses the
+#' correctly ordered Cholesky factors for the corresponding covariance matrices.
 #'
-#' @param res Fitted VI result list returned by [run_vi_hetero_from_mats()] or
-#'   [run_vi_homo_from_mats()]. It supplies posterior estimates of
+#' @param res Fitted VI result list returned by [fit_spatial_hvi()],
+#'   [run_vi_hetero_from_mats()] or [run_vi_homo_from_mats()]. It supplies posterior estimates of
 #'   \eqn{\sigma^2_{gc}}, \eqn{\Sigma}, \eqn{\rho}, and the fitted adjacency
 #'   needed to compute trait-specific narrow-sense heritability \eqn{h_c^2} and
 #'   the global principal-component heritability summary \eqn{H^2}. The result
@@ -174,7 +177,8 @@ reconstruct_full_sig_list <- function(res) {
 #'   be reordered before fitting; unsupported values are rejected by
 #'   [base::match.arg()].
 #'
-#' @return A list with elements `h2`, `H2`, and `pieces`.
+#' @return A list with elements `h2`, `H2` (PCH), and `pieces`. Manuscript fits
+#'   also include `bilateral_mean`.
 #' @export
 #'
 #' @examples
@@ -192,6 +196,12 @@ reconstruct_full_sig_list <- function(res) {
 #' heritability_from_vi(fit)$H2
 heritability_from_vi <- function(res, a_mat = NULL, pairing = c("halves")) {
   pairing <- match.arg(pairing)
+  if (inherits(res, "spatialhvi_fit")) {
+    if (!is.null(a_mat) && !isTRUE(all.equal(a_mat, res$A, check.attributes = FALSE))) {
+      stop("For a manuscript fit, use the fitted adjacency matrix.", call. = FALSE)
+    }
+    return(manuscript_heritability_summary(res))
+  }
   validate_vi_result(res)
 
   c_traits <- length(res$E_sigma2)
@@ -224,7 +234,7 @@ heritability_from_vi <- function(res, a_mat = NULL, pairing = c("halves")) {
   sigma_e <- kronecker(e_sigma, r_inv)
   chol_sigma_e <- chol(0.5 * (sigma_e + t(sigma_e)) + diag(1e-10, c_traits))
   sigma_e_inv_half <- backsolve(chol_sigma_e, diag(c_traits))
-  m_mat <- sigma_e_inv_half %*% sigma_g %*% t(sigma_e_inv_half)
+  m_mat <- t(sigma_e_inv_half) %*% sigma_g %*% sigma_e_inv_half
   lambda_max <- max(eigen(0.5 * (m_mat + t(m_mat)), symmetric = TRUE, only.values = TRUE)$values)
   lambda_max <- max(lambda_max, 0)
 

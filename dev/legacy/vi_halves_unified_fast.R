@@ -1,4 +1,6 @@
 ## ============================  vi_halves_unified_fast.R  ============================ ##
+## Historical workflow retained for compatibility. For the manuscript interface,
+## use spatialHVI::fit_spatial_hvi(). PCH whitening was corrected in version 0.1.0.
 ## Fast exact version for HALVES ordering.
 ##
 ## Compared with the dense prototype:
@@ -954,7 +956,7 @@ heritability_from_vi <- function(res, A_mat = NULL, pairing = c("halves")) {
 
   L <- chol(0.5 * (Sigma_e + t(Sigma_e)) + diag(1e-10, C))
   Se_inv_half <- backsolve(L, diag(C))
-  Mmat <- Se_inv_half %*% Sigma_g %*% t(Se_inv_half)
+  Mmat <- t(Se_inv_half) %*% Sigma_g %*% Se_inv_half
 
   lam_max <- max(eigen(0.5 * (Mmat + t(Mmat)), symmetric = TRUE, only.values = TRUE)$values)
   lam_max <- max(lam_max, 0)

@@ -7,8 +7,8 @@
 heritability_from_vi(res, a_mat = NULL, pairing = c("halves"))
 }
 \arguments{
-\item{res}{Fitted VI result list returned by \code{\link[=run_vi_hetero_from_mats]{run_vi_hetero_from_mats()}} or
-\code{\link[=run_vi_homo_from_mats]{run_vi_homo_from_mats()}}. It supplies posterior estimates of
+\item{res}{Fitted VI result list returned by \code{\link[=fit_spatial_hvi]{fit_spatial_hvi()}},
+\code{\link[=run_vi_hetero_from_mats]{run_vi_hetero_from_mats()}} or \code{\link[=run_vi_homo_from_mats]{run_vi_homo_from_mats()}}. It supplies posterior estimates of
 \eqn{\sigma^2_{gc}}, \eqn{\Sigma}, \eqn{\rho}, and the fitted adjacency
 needed to compute trait-specific narrow-sense heritability \eqn{h_c^2} and
 the global principal-component heritability summary \eqn{H^2}. The result
@@ -29,11 +29,15 @@ be reordered before fitting; unsupported values are rejected by
 \code{\link[base:match.arg]{base::match.arg()}}.}
 }
 \value{
-A list with elements \code{h2}, \code{H2}, and \code{pieces}.
+A list with elements \code{h2}, \code{H2} (PCH), and \code{pieces}. Manuscript fits
+also include \code{bilateral_mean}.
 }
 \description{
-Computes broad-sense and trait-specific narrow-sense heritability from a fitted
-halves-ordered VI model.
+Computes trait-specific marker heritability and the principal-component
+heritability (PCH) summary from a fitted halves-ordered VI model. Fits from
+\code{\link[=fit_spatial_hvi]{fit_spatial_hvi()}} use the manuscript mean-inverse residual convention;
+legacy fits keep their inverse-mean convention. The PCH whitening uses the
+correctly ordered Cholesky factors for the corresponding covariance matrices.
 }
 \examples{
 set.seed(1)

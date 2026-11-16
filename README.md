@@ -1,103 +1,168 @@
-spatialHVI
-================
+# spatialHVI
 
-`spatialHVI` is an R package for Bayesian spatial heritability analysis
-of halves-ordered paired traits. The package includes functions for
-simulation, variational inference fitting, and heritability summaries.
-
-The package is currently a development version.
+`spatialHVI` implements a Bayesian spatial mixed model for marker-heritability
+analysis of paired neuroimaging phenotypes. Version 0.1.0 includes the manuscript
+MFVI implementation, original variational intervals, linear-response variational
+Bayes (LRVB), and simulation-calibrated intervals for single traits and bilateral
+means.
 
 ## Installation
 
-``` r
+```r
 install.packages("remotes")
 remotes::install_github("yytyyt11/spatialHVI")
 ```
 
-For local development:
+## Manuscript workflow
 
-``` r
-devtools::load_all()
-```
+Use `fit_spatial_hvi()` for the manuscript implementation. `y` is a C by n matrix
+with traits in rows `(L1, ..., LJ, R1, ..., RJ)` and subjects in columns, where
+C = 2J. The GRM must use exactly the same subject order. Covariate adjustment
+and any phenotype standardization precede fitting.
 
-## Main functions
-
-- `simulate_halves_batch()`: generate simulation outputs from grouped
-  SNP files.
-- `run_vi_hetero_from_mats()`: fit the heteroscedastic VI model from
-  matrices.
-- `run_vi_homo_from_mats()`: fit the homoscedastic VI model from
-  matrices.
-- `fit_simulation_case_halves()`: fit one simulated dataset and
-  summarize heritability.
-- `run_simulation_batch_halves()`: fit a whole simulation directory from
-  disk.
-- `run_realdata_brain_hetero_halves()`: run the real-data workflow from
-  a brain CSV plus genotype matrix or kinship matrix.
-- `run_realdata_halves_from_files()`: run the real-data workflow from a
-  brain CSV and `.RData` file.
-- `heritability_from_vi()`: compute trait-wise narrow-sense heritability
-  and global principal-component heritability summary.
-- `save_vi_result()`: write posterior summaries to disk.
-
-## Function argument guide
-
-Detailed parameter explanations are available in the function help
-pages, for example `?run_vi_hetero_from_mats` and
-`?run_realdata_halves_from_files`. For a centralized guide to data
-layout, manuscript notation (`Y`, `K`, `A`, `rho`), sample alignment,
-trait ordering, and common input mistakes, see the vignette:
-
-``` r
-vignette("function-arguments", package = "spatialHVI")
-```
-
-## Example
-
-``` r
+```r
 library(spatialHVI)
 
-set.seed(1)
-x <- matrix(rnorm(48), nrow = 8)
-y <- matrix(rnorm(32), nrow = 4)
-k_mat <- build_kinship_matrix(x)
+# Small synthetic example, requiring no ADNI data
+set.seed(17)
+y <- matrix(rnorm(6 * 40), 6, 40)
+x <- matrix(rnorm(40 * 70), 40, 70)
+K <- tcrossprod(x) / 70
+A <- matrix(c(0, 1, 0.3, 1, 0, 0.6, 0.3, 0.6, 0), 3)
 
-fit <- run_vi_hetero_from_mats(
-  y = y,
-  k_mat = k_mat,
-  rho_grid = seq(0, 0.2, by = 0.1),
-  max_iter = 2,
-  tol = 0,
-  verbose = FALSE
-)
+fit <- fit_spatial_hvi(y, K, A, tol = 1e-7)
+stopifnot(fit$converged)
+points <- heritability_from_vi(fit)
+vi <- vi_heritability_intervals(fit, draws = 1000, seed = 42)
+lrvb <- lrvb_heritability_intervals(fit, verify_derivatives = TRUE)
 
-heritability_from_vi(fit)$H2
+points$h2                      # Single traits
+points$bilateral_mean          # Means of left/right heritabilities
+points$H2                      # Principal-component heritability (PCH)
+lrvb$intervals                 # Trait and bilateral-mean intervals
+lrvb$diagnostics
 ```
 
-## Real-data template
+The example checks the interfaces on synthetic data; it is not a reproduction
+of the manuscript's 160-data-set coverage experiment. An executable version is
+provided in `inst/examples/manuscript_synthetic.R`.
 
-``` r
-run_realdata_halves_from_files(
-  brain_csv = "path/to/BrainMeasure_data.csv",
-  rdata_path = "path/to/FreeSurfer_Data.RData",
-  use_k_from = "X",
-  x_object = "FreeSurfer_list_Data",
-  annotation_object = "SNP_gene_member_reduced",
-  x_id_col = "PTID",
-  phenotype_layout = "traits_in_rows"
-)
+| Task | Function |
+| --- | --- |
+| Original model priors | `spatial_hvi_prior()` |
+| Manuscript MFVI fit | `fit_spatial_hvi()` |
+| Marker heritability and PCH | `heritability_from_vi()` |
+| Original joint variational intervals | `vi_heritability_intervals()` |
+| Discrete-grid LRVB intervals and diagnostics | `lrvb_heritability_intervals()` |
+| Learn calibration on development simulations | `learn_interval_calibration()` |
+| Fixed S17 coefficients | `manuscript_interval_calibration()` |
+| Apply frozen calibration | `calibrate_heritability_intervals()` |
+
+### Model and point estimates
+
+The model uses trait-specific genetic variances with a subject GRM and residual
+covariance `Sigma %x% solve(D_A - rho * A)` in halves order. The default priors
+are inverse-gamma shape 2.1 and scale 0.33 for genetic variances, and
+inverse-Wishart degrees of freedom 8 and scale `2 * diag(2)` for Sigma.
+The discrete rho grid is `seq(0, 0.99, 0.01)`. The original initialization uses
+`init_h2 = 0.15`, `init_ig_shape = 3`, and `init_iw_df = 8`.
+
+By default, the GRM is normalized to mean diagonal one and receives a single
+diagonal regularization of 1e-6. A supplied adjacency is retained as given.
+If `a_mat = NULL`, the original pair-mean correlation graph is estimated from
+the supplied phenotypes with k = 2. Graph weights and trait order are part of
+the model specification. `rho_grid = 0` gives the ablation with `Q = D_A`.
+
+The manuscript plug-in estimate uses
+`E[sigma_g^2] / (E[sigma_g^2] + diag(E[Sigma] %x% E[Q^-1]))`.
+LRVB and calibration do not overwrite these point estimates or change the
+model, priors, or MFVI factorization.
+
+### Interval construction and calibration
+
+MFVI intervals use joint draws, including a shared draw of rho and Sigma.
+Bilateral means are formed within each draw. R quantile type 7 is the default
+for the simulations; use `quantile_type = 8` for the archived ADNI convention.
+
+LRVB retains all valid points of the discrete rho grid and accounts for responses
+of latent genetic effects and covariance parameters. A stationary point of the
+same MFVI equations is refined for covariance calculation only. The returned
+centers remain the original MFVI estimates. Bilateral-mean variances include
+the left/right covariance. Numerical checks cover stationarity, response symmetry,
+positive semidefiniteness, linear solves, and sensitivity to numerical refinement.
+Optional checks compare analytic derivatives with finite differences and tilted
+refits. Failed checks raise an error rather than returning repaired intervals.
+
+For study-specific calibration, collect a development-simulation data frame
+with `dataset_id`, `target`, `h2`, `truth`, and `sd_logit`. Use the same number of
+targets per data set within each class (`trait` and `bilateral_mean`). Learn and
+freeze the coefficients before evaluating separate validation simulations:
+
+```r
+# development must come from separate simulated data sets with known truth
+# calibration <- learn_interval_calibration(development)
+# corrected <- calibrate_heritability_intervals(lrvb, calibration)
 ```
 
-## Reference
+For reproducing the manuscript, the full-precision coefficients from S17C are
+available explicitly:
 
-Please cite the manuscript associated with `spatialHVI` as:
+```r
+calibration <- manuscript_interval_calibration()
+corrected <- calibrate_heritability_intervals(lrvb, calibration)
+```
 
-Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang
-(2026). *Bayesian Spatial Heritability Analysis: A Genome-Wide Modeling
-Framework for Disentangling Genetic Contributions to Spatially
-Correlated Complex Traits*. Preprint / Manuscript.
+If `a` and `b` are the 2.5% and 97.5% quantiles of the standardized logit error,
+the interval is `[plogis(z - b*s), plogis(z - a*s)]`, where z is the original
+logit point estimate and s is its LRVB standard deviation. Separate coefficients
+are used for traits and bilateral means. The S17 coefficients were learned from
+80 development data sets and fixed before the 160-data-set confirmation.
+They are design-dependent, not universal coverage constants for new studies.
+LRVB posterior-covariance checks and repeated-sampling 95% coverage are distinct
+assessments. The ADNI correction is reported as uncertainty sensitivity.
+
+### Compatibility with earlier versions
+
+`run_vi_hetero_from_mats()`, `run_vi_homo_from_mats()`, simulation utilities, and
+file-based real-data helpers remain available with their existing behavior.
+Their historical initialization and inverse-mean residual summary differ from
+the manuscript interface. Use `fit_spatial_hvi()` for the updated workflow;
+do not mix legacy summary conventions with manuscript intervals.
+
+The legacy PCH calculation now uses `t(Uinv) %*% G %*% Uinv` for
+`U <- chol(E)`. This agrees with the generalized eigenvalue definition and is
+invariant to a consistent permutation of traits. This correction does not
+change the legacy trait-wise heritability estimates.
+
+## Reproducibility and data
+
+Numerical functions were extracted from the frozen experiment source; their
+source names and SHA-256 hashes appear in `inst/provenance/manuscript_code.tsv`.
+The only adaptation within the fitting function is return-path metadata.
+No subject-level ADNI phenotypes, genotypes, GRMs, fitted objects, or posterior
+draws are distributed. Fitted objects created on ADNI inputs retain restricted
+inputs and must not be uploaded to a public repository.
+
+The manuscript analyzes 530 participants, 536,529 genome-wide SNPs and 56 traits.
+Reproducing those analyses requires independently authorized ADNI access and
+the same sample alignment, preprocessing, graph and GRM. The public examples and
+tests use synthetic inputs. Existing function help and the
+`function-arguments` vignette document the legacy interfaces.
+
+```r
+devtools::test()
+```
+
+## Citation
+
+Yang, Yutong, Fulong Zhang, Zhibin Pu, Shufei Ge, and Shijia Wang (2026).
+*A Bayesian spatial mixed model for heritability analysis of correlated
+neuroimaging phenotypes*. Manuscript.
+
+LRVB follows Giordano, Broderick and Jordan (2018), *Covariances, Robustness,
+and Variational Bayes*. See the manuscript and S1 Text, Appendix E, for the
+model-specific response and interval construction.
 
 ## Contact
 
-Yutong Yang <yutomakabaka@gmail.com>, Shijia Wang
-<wangshj1@shanghaitech.edu.cn>
+Yutong Yang <yutomakabaka@gmail.com>; Shijia Wang <wangshj1@shanghaitech.edu.cn>.
